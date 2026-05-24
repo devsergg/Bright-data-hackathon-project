@@ -1,0 +1,142 @@
+[
+  {
+    "id": "attic-sf",
+    "name": "The Attic",
+    "address": "3336 Mission St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/place/The+Attic/data=!4m2!3m1!1s0x808f7e8e5b45e58f:0x4b8a7e2f6c9d1a3e",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "latin-american-club",
+    "name": "Latin American Club",
+    "address": "3286 22nd St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/Latin+American+Club+3286+22nd+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "elbo-room",
+    "name": "Elbo Room",
+    "address": "647 Valencia St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/Elbo+Room+647+Valencia+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "bottom-of-the-hill",
+    "name": "Bottom of the Hill",
+    "address": "1233 17th St, San Francisco, CA 94107",
+    "maps_url": "https://www.google.com/maps/search/Bottom+of+the+Hill+1233+17th+St+San+Francisco+CA",
+    "neighborhood": "Potrero Hill"
+  },
+  {
+    "id": "virgil-s",
+    "name": "Virgil's Sea Room",
+    "address": "3152 Mission St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/Virgil%27s+Sea+Room+3152+Mission+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "lucky-13",
+    "name": "Lucky 13",
+    "address": "2140 Market St, San Francisco, CA 94114",
+    "maps_url": "https://www.google.com/maps/search/Lucky+13+2140+Market+St+San+Francisco+CA",
+    "neighborhood": "Castro"
+  },
+  {
+    "id": "amnesia",
+    "name": "Amnesia",
+    "address": "853 Valencia St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/Amnesia+853+Valencia+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "phone-booth",
+    "name": "The Phone Booth",
+    "address": "1398 S Van Ness Ave, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/The+Phone+Booth+1398+S+Van+Ness+Ave+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "kilowatt",
+    "name": "Kilowatt",
+    "address": "3160 16th St, San Francisco, CA 94103",
+    "maps_url": "https://www.google.com/maps/search/Kilowatt+3160+16th+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "mission-bar",
+    "name": "Mission Bar",
+    "address": "2695 Mission St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/Mission+Bar+2695+Mission+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "el-rio",
+    "name": "El Rio",
+    "address": "3158 Mission St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/El+Rio+3158+Mission+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "knockout",
+    "name": "The Knockout",
+    "address": "3223 Mission St, San Francisco, CA 94110",
+    "maps_url": "https://www.google.com/maps/search/The+Knockout+3223+Mission+St+San+Francisco+CA",
+    "neighborhood": "Mission"
+  },
+  {
+    "id": "bergerac",
+    "name": "Bergerac",
+    "address": "316 11th St, San Francisco, CA 94103",
+    "maps_url": "https://www.google.com/maps/search/Bergerac+316+11th+St+San+Francisco+CA",
+    "neighborhood": "SoMa"
+  },
+  {
+    "id": "the-stud",
+    "name": "The Stud",
+    "address": "399 9th St, San Francisco, CA 94103",
+    "maps_url": "https://www.google.com/maps/search/The+Stud+399+9th+St+San+Francisco+CA",
+    "neighborhood": "SoMa"
+  },
+  {
+    "id": "temple-nightclub",
+    "name": "Temple Nightclub",
+    "address": "540 Howard St, San Francisco, CA 94105",
+    "maps_url": "https://www.google.com/maps/search/Temple+Nightclub+540+Howard+St+San+Francisco+CA",
+    "neighborhood": "SoMa"
+  },
+  {
+    "id": "1015-folsom",
+    "name": "1015 Folsom",
+    "address": "1015 Folsom St, San Francisco, CA 94103",
+    "maps_url": "https://www.google.com/maps/search/1015+Folsom+1015+Folsom+St+San+Francisco+CA",
+    "neighborhood": "SoMa"
+  },
+  {
+    "id": "verso",
+    "name": "Verso",
+    "address": "168 Welsh St, San Francisco, CA 94107",
+    "maps_url": "https://www.google.com/maps/search/Verso+168+Welsh+St+San+Francisco+CA",
+    "neighborhood": "SoMa"
+  },
+  {
+    "id": "cityscape",
+    "name": "Cityscape Rooftop Bar",
+    "address": "333 O'Farrell St, San Francisco, CA 94102",
+    "maps_url": "https://www.google.com/maps/search/Cityscape+Rooftop+Bar+333+O%27Farrell+St+San+Francisco+CA",
+    "neighborhood": "Union Square"
+  },
+  {
+    "id": "vesuvio",
+    "name": "Vesuvio Cafe",
+    "address": "255 Columbus Ave, San Francisco, CA 94133",
+    "maps_url": "https://www.google.com/maps/search/Vesuvio+Cafe+255+Columbus+Ave+San+Francisco+CA",
+    "neighborhood": "North Beach"
+  },
+  {
+    "id": "tosca-cafe",
+    "name": "Tosca Cafe",
+    "address": "242 Columbus Ave, San Francisco, CA 94133",
+    "maps_url": "https://www.google.com/maps/search/Tosca+Cafe+242+Columbus+Ave+San+Francisco+CA",
+    "neighborhood": "North Beach"
+  }
+]

@@ -1,0 +1,9 @@
+.env
+*.jsonl
+capture.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.DS_Store

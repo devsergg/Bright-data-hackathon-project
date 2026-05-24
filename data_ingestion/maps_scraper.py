@@ -1,8 +1,11 @@
 """
 Bright Data SERP API wrapper for Google Maps telemetry.
 
-Uses the synchronous SERP API (POST https://api.brightdata.com/request) with brd_json=1
-to get structured JSON back immediately — no polling needed for the 15-min cron.
+Two entry points:
+  fetch_maps_telemetry(venues)  — venue-specific scrapes (preserves popular_times)
+  trigger_micro_scrape(lat, lon) — coordinate-targeted discovery scrape
+
+Uses the synchronous SERP API (POST https://api.brightdata.com/request) with brd_json=1.
 
 FIELD_MAP below controls how we extract data from the raw API response.
 After your first test call, check the printed raw JSON and update the keys if needed.
@@ -178,3 +181,51 @@ def fetch_maps_telemetry(venues: list[dict]) -> list[dict]:
 
     logger.info("Cycle complete: %d/%d venues scraped.", len(results), len(venues))
     return results
+
+
+def trigger_micro_scrape(lat: float, lon: float, radius_meters: int = 200) -> list[dict]:
+    """
+    Coordinate-targeted discovery scrape: find active venues near a DBSCAN centroid.
+
+    Fires a Google Maps area search via Bright Data rather than a specific venue URL.
+    Returns a list of venue records found near the centroid. These records will have
+    name/address/rating but popular_times is NOT guaranteed — use fetch_maps_telemetry
+    on a specific venue URL when you need the histogram for baseline math.
+
+    Called only for DBSCAN hotspots that don't overlap with known venues.
+    """
+    # Build a Google Maps search URL centered on the hotspot coordinates.
+    # Zoom level 16z ≈ 500m radius view; num results controlled by Maps UI.
+    search_url = (
+        f"https://www.google.com/maps/search/bars+nightlife/@{lat},{lon},16z"
+    )
+
+    scraped_at = datetime.now(timezone.utc).isoformat()
+    logger.info("Micro-scrape at (%.5f, %.5f) radius=%dm", lat, lon, radius_meters)
+
+    try:
+        raw = _call_serp_api(search_url)
+        logger.info(
+            "=== MICRO-SCRAPE RAW (lat=%.5f lon=%.5f) ===\n%s",
+            lat, lon,
+            json.dumps(raw, indent=2, ensure_ascii=False)[:3000],
+        )
+
+        # The search result may return a list of places or a single place dict.
+        # Normalise to a list.
+        places = raw if isinstance(raw, list) else raw.get("results", raw.get("places", [raw]))
+        records: list[dict] = []
+        for i, place in enumerate(places[:10]):  # cap at 10 results
+            record: dict = {"scraped_at": scraped_at, "source": "micro_scrape",
+                            "hotspot_lat": lat, "hotspot_lon": lon}
+            for field_name, candidates in FIELD_MAP.items():
+                record[field_name] = _extract_field(place, candidates)
+            record.setdefault("id", f"micro_{lat:.4f}_{lon:.4f}_{i}")
+            records.append(record)
+
+        logger.info("  Micro-scrape returned %d venue candidates", len(records))
+        return records
+
+    except Exception as exc:
+        logger.error("Micro-scrape failed at (%.5f, %.5f): %s", lat, lon, exc)
+        return []

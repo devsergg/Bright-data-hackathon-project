@@ -31,8 +31,10 @@ from datetime import datetime, timezone
 
 import config
 from data import store
+from data_ingestion.event_scraper import search_events_near
 from data_ingestion.macro_telemetry import fetch_macro_coordinates
 from data_ingestion.maps_scraper import fetch_maps_telemetry, trigger_micro_scrape
+from services.event_cache import get as cache_get, put as cache_put, stats as cache_stats
 from services.spatial_clustering import extract_hotspots, venues_near_hotspots
 from utils.geo_math import haversine_meters
 
@@ -131,13 +133,41 @@ def run_cycle(venues: list[dict], cycle_num: int) -> None:
                 store.append(discovery_records, config.CARNAVAL_STORE_PATH)
                 logger.info("  Appended %d discovery records", len(discovery_records))
 
+    # --- Step 5: Event scraping (cache-guarded — fires at most once per hotspot per hour) ---
+    total_new_events = 0
+    for hotspot in hotspots:
+        cached = cache_get(hotspot.lat, hotspot.lon, ttl_s=config.EVENT_CACHE_TTL_S)
+        if cached is not None:
+            logger.info(
+                "  Events cache hit for hotspot #%d (%d events) — skipping scrape",
+                hotspot.cluster_id, len(cached),
+            )
+            continue
+
+        events = search_events_near(
+            hotspot.lat, hotspot.lon,
+            radius_km=config.EVENT_SEARCH_RADIUS_KM,
+        )
+        cache_put(hotspot.lat, hotspot.lon, events)
+
+        if events:
+            store.append(events, config.EVENTS_STORE_PATH)
+            total_new_events += len(events)
+            logger.info(
+                "  Hotspot #%d: scraped %d events → %s",
+                hotspot.cluster_id, len(events), config.EVENTS_STORE_PATH,
+            )
+
     # Cycle summary
     total_hotspots = len(hotspots)
     total_venues_scraped = len(active_venues)
     saved = len(venues) - total_venues_scraped
+    ev_stats = cache_stats()
     logger.info(
-        "=== Cycle %d done: %d hotspot(s) → %d/%d venues scraped (%d API calls saved) ===",
-        cycle_num, total_hotspots, total_venues_scraped, len(venues), saved,
+        "=== Cycle %d done: %d hotspot(s) → %d/%d venues scraped, %d new events "
+        "(%d API calls saved, %d event cells cached) ===",
+        cycle_num, total_hotspots, total_venues_scraped, len(venues),
+        total_new_events, saved, ev_stats["cells_cached"],
     )
 
 

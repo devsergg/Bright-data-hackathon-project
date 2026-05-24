@@ -15,7 +15,12 @@ LANGSMITH_API_KEY: str = os.environ.get("LANGSMITH_API_KEY", "")
 CAPTURE_INTERVAL_SECONDS: int = 15 * 60  # 15 minutes
 CARNAVAL_STORE_PATH: str = "data/capture_carnaval.jsonl"
 CONTROL_STORE_PATH: str = "data/capture_control.jsonl"
+EVENTS_STORE_PATH: str = "data/capture_events.jsonl"
 VENUES_PATH: str = "data/venues.json"
 
 # Anomaly threshold — Z-score above this triggers social scrape (Day 1+)
 ANOMALY_Z_THRESHOLD: float = 2.0
+
+# Event scraping
+EVENT_SEARCH_RADIUS_KM: float = 1.0   # radius for nearby-events API queries
+EVENT_CACHE_TTL_S: int = 3600         # 1 hour — events don't change every 15 min

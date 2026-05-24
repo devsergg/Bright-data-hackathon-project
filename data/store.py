@@ -1,8 +1,8 @@
 """
-Append-only JSONL store for venue telemetry cycles.
+Append-only JSONL store for venue telemetry cycles and events.
 
-One JSON object per line, one line per venue per cycle.
-Never overwrites — every call to append() grows the file.
+One JSON object per line, never overwrites — every call to append() grows the file.
+Two stores: capture_*.jsonl for venue telemetry, capture_events.jsonl for events.
 """
 
 import json
@@ -52,3 +52,39 @@ def latest_cycle(path: str) -> list[dict]:
     if not cycles:
         return []
     return list(cycles.values())[-1]
+
+
+# ---------------------------------------------------------------------------
+# Events store helpers
+# ---------------------------------------------------------------------------
+
+def events_near(
+    lat: float,
+    lon: float,
+    radius_km: float = 1.0,
+    path: str = "data/capture_events.jsonl",
+) -> list[dict]:
+    """
+    Return all stored events within radius_km of (lat, lon).
+    Uses a simple Euclidean approximation (fine at city scale).
+    """
+    from utils.geo_math import haversine_meters
+    radius_m = radius_km * 1000
+    results = []
+    for record in read_all(path):
+        rlat = record.get("latitude") or record.get("hotspot_lat")
+        rlon = record.get("longitude") or record.get("hotspot_lon")
+        if rlat is None or rlon is None:
+            continue
+        if haversine_meters(lat, lon, float(rlat), float(rlon)) <= radius_m:
+            results.append(record)
+    return results
+
+
+def events_for_neighborhood(
+    neighborhood: str,
+    path: str = "data/capture_events.jsonl",
+) -> list[dict]:
+    """Return stored events matching a neighborhood name (case-insensitive)."""
+    needle = neighborhood.lower()
+    return [r for r in read_all(path) if needle in (r.get("neighborhood") or "").lower()]

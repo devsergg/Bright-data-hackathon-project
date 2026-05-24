@@ -16,6 +16,8 @@ CAPTURE_INTERVAL_SECONDS: int = 15 * 60  # 15 minutes
 CARNAVAL_STORE_PATH: str = "data/capture_carnaval.jsonl"
 CONTROL_STORE_PATH: str = "data/capture_control.jsonl"
 EVENTS_STORE_PATH: str = "data/capture_events.jsonl"
+SOCIAL_STORE_PATH: str = "data/capture_social_posts.jsonl"
+SOCIAL_EVENTS_STORE_PATH: str = "data/capture_social_events.jsonl"
 VENUES_PATH: str = "data/venues.json"
 
 # Anomaly threshold — Z-score above this triggers social scrape (Day 1+)

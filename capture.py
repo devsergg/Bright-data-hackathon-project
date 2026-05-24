@@ -2,25 +2,22 @@
 Carnaval capture loop — DBSCAN-guided macro-to-micro funnel.
 
 Flow every 15 minutes:
-  1. Macro net  — fetch free Bay Wheels GBFS coordinates (no API cost)
-  2. DBSCAN     — find density clusters → hotspot centroids
-  3. Filter     — only scrape known venues that fall within a hotspot cluster
-  4. Discovery  — for hotspots with no nearby known venue, do a coordinate search
-  5. Store      — append all records to JSONL
+  1. Macro net    — fetch free Bay Wheels GBFS coordinates (no API cost)
+  2. DBSCAN       — find density clusters → hotspot centroids
+  3. Venue filter — only scrape known venues inside hotspot clusters
+  4. Discovery    — coordinate search for hotspots with no known venue
+  5. Events       — Google Events near each hotspot (1-hr cache)
+  6. Social       — Twitter/Instagram posts near each hotspot (1-hr cache)
+                    → cluster posts into social events via social_event_detector
 
 Cost comparison vs. naive (scrape all venues every cycle):
   Naive:   20 venues × 30 cycles = 600 Bright Data calls
   DBSCAN:  ~5 active venues × 30 cycles ≈ 150 calls  (75% reduction)
 
-On quiet nights only the hottest 2-3 venues get scraped.
-On Carnaval night the Mission cluster keeps most Mission venues in scope.
-
 Usage:
     export BRIGHTDATA_API_TOKEN="..."
     export BRIGHTDATA_ZONE="serp"
     python capture.py
-
-Ctrl-C stops cleanly between or during cycles.
 """
 
 import json
@@ -34,7 +31,9 @@ from data import store
 from data_ingestion.event_scraper import search_events_near
 from data_ingestion.macro_telemetry import fetch_macro_coordinates
 from data_ingestion.maps_scraper import fetch_maps_telemetry, trigger_micro_scrape
+from data_ingestion.social_scraper import fetch_social_context
 from services.event_cache import get as cache_get, put as cache_put, stats as cache_stats
+from services.social_event_detector import detect_social_events
 from services.spatial_clustering import extract_hotspots, venues_near_hotspots
 from utils.geo_math import haversine_meters
 
@@ -158,16 +157,54 @@ def run_cycle(venues: list[dict], cycle_num: int) -> None:
                 hotspot.cluster_id, len(events), config.EVENTS_STORE_PATH,
             )
 
+    # --- Step 6: Social scraping (also cache-guarded — fires once per hotspot per hour) ---
+    total_new_social_events = 0
+    for hotspot in hotspots:
+        # Reuse the same event cache keyed by (lat, lon) — social fires on same schedule
+        social_cache_key = (hotspot.lat + 0.001, hotspot.lon)  # offset key from events
+        cached_social = cache_get(social_cache_key[0], social_cache_key[1],
+                                  ttl_s=config.EVENT_CACHE_TTL_S)
+        if cached_social is not None:
+            logger.info(
+                "  Social cache hit for hotspot #%d — skipping scrape",
+                hotspot.cluster_id,
+            )
+            continue
+
+        from data_ingestion.event_scraper import _neighborhood_for
+        neighborhood = _neighborhood_for(hotspot.lat, hotspot.lon)
+
+        posts = fetch_social_context(hotspot.lat, hotspot.lon, neighborhood)
+        # Cache even an empty result to avoid re-scraping a quiet hotspot
+        cache_put(social_cache_key[0], social_cache_key[1], posts)
+
+        if posts:
+            store.append(posts, config.SOCIAL_STORE_PATH)
+            social_events = detect_social_events(
+                posts,
+                hotspot_lat=hotspot.lat,
+                hotspot_lon=hotspot.lon,
+                neighborhood=neighborhood,
+            )
+            if social_events:
+                social_event_dicts = [e.to_dict() for e in social_events]
+                store.append(social_event_dicts, config.SOCIAL_EVENTS_STORE_PATH)
+                total_new_social_events += len(social_events)
+                logger.info(
+                    "  Hotspot #%d: %d posts → %d social event(s) detected",
+                    hotspot.cluster_id, len(posts), len(social_events),
+                )
+
     # Cycle summary
     total_hotspots = len(hotspots)
     total_venues_scraped = len(active_venues)
     saved = len(venues) - total_venues_scraped
     ev_stats = cache_stats()
     logger.info(
-        "=== Cycle %d done: %d hotspot(s) → %d/%d venues scraped, %d new events "
-        "(%d API calls saved, %d event cells cached) ===",
+        "=== Cycle %d done: %d hotspot(s) → %d/%d venues, %d new events, "
+        "%d social events (%d API calls saved) ===",
         cycle_num, total_hotspots, total_venues_scraped, len(venues),
-        total_new_events, saved, ev_stats["cells_cached"],
+        total_new_events, total_new_social_events, saved,
     )
 
 

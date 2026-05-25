@@ -33,6 +33,7 @@ from data_ingestion.macro_telemetry import fetch_macro_coordinates
 from data_ingestion.maps_scraper import fetch_maps_telemetry, trigger_micro_scrape
 from data_ingestion.social_scraper import fetch_social_context
 from services.event_cache import get as cache_get, put as cache_put, stats as cache_stats
+from services.llm_synthesis import synthesize_vibe
 from services.social_event_detector import detect_social_events
 from services.spatial_clustering import extract_hotspots, venues_near_hotspots
 from utils.geo_math import haversine_meters
@@ -63,6 +64,53 @@ _QUIET_NIGHT_FALLBACK_COUNT = 5
 def load_venues() -> list[dict]:
     with open(config.VENUES_PATH, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _run_vibe_synthesis(active_venues: list[dict], hotspots) -> None:
+    """
+    Run Claude vibe synthesis for venues that are clearly anomalous this cycle.
+
+    Uses a simple proxy for 'anomalous' at capture time: venues with
+    live_occupancy present in their last record get synthesised.
+    Full Z-score gating is added when anomaly_engine.py is built (Day 1).
+    """
+    from data_ingestion.event_scraper import _neighborhood_for
+
+    for venue in active_venues[:3]:    # cap at 3 per cycle to control LLM cost
+        # Pull latest scraped record for this venue from the store
+        all_records = store.read_all(config.CARNAVAL_STORE_PATH)
+        venue_records = [r for r in all_records if r.get("id") == venue["id"]]
+        if not venue_records:
+            continue
+        latest = venue_records[-1]
+
+        occupancy = latest.get("live_occupancy")
+        if occupancy is None:
+            continue                   # no live signal — skip
+
+        neighborhood = venue.get("neighborhood", _neighborhood_for(
+            latest.get("latitude", 0), latest.get("longitude", 0)
+        ))
+
+        # Gather social posts for this venue's hotspot area
+        posts = store.read_all(config.SOCIAL_STORE_PATH)
+        venue_posts = [
+            p for p in posts
+            if p.get("neighborhood", "").lower() == neighborhood.lower()
+        ][-30:]  # most recent 30
+
+        lit_score = int(occupancy)     # placeholder until anomaly_engine is live
+        logger.info("Synthesising vibe for %s (occupancy=%s)...", venue["name"], occupancy)
+        try:
+            vibe = synthesize_vibe(venue, venue_posts, lit_score=lit_score)
+            # Attach vibe to the venue record and re-append as an enriched record
+            enriched = {**latest, "vibe": vibe, "vibe_at": datetime.now(timezone.utc).isoformat()}
+            store.append([enriched], config.CARNAVAL_STORE_PATH)
+            logger.info(
+                "  Vibe [%d turns]: %s", vibe.get("agent_turns", 0), vibe.get("summary")
+            )
+        except Exception as exc:
+            logger.error("Vibe synthesis failed for %s: %s", venue["name"], exc)
 
 
 def _discovery_needed(hotspot, active_venues: list[dict]) -> bool:
@@ -194,6 +242,12 @@ def run_cycle(venues: list[dict], cycle_num: int) -> None:
                     "  Hotspot #%d: %d posts → %d social event(s) detected",
                     hotspot.cluster_id, len(posts), len(social_events),
                 )
+
+    # --- Step 7: Vibe synthesis for anomalous venues (Claude agent, triggered once per store cycle) ---
+    # Only fires for venues whose venue record indicates high activity.
+    # Requires ANTHROPIC_API_KEY — silently skipped if not set.
+    if config.ANTHROPIC_API_KEY and hotspots:
+        _run_vibe_synthesis(active_venues, hotspots)
 
     # Cycle summary
     total_hotspots = len(hotspots)

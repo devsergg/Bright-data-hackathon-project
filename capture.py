@@ -209,7 +209,7 @@ def run_cycle(venues: list[dict], cycle_num: int) -> None:
     total_new_social_events = 0
     for hotspot in hotspots:
         # Reuse the same event cache keyed by (lat, lon) — social fires on same schedule
-        social_cache_key = (hotspot.lat + 0.001, hotspot.lon)  # offset key from events
+        social_cache_key = (hotspot.lat + 100.0, hotspot.lon)  # +100 offset — round(lat+100,2) never equals round(lat,2)
         cached_social = cache_get(social_cache_key[0], social_cache_key[1],
                                   ttl_s=config.EVENT_CACHE_TTL_S)
         if cached_social is not None:

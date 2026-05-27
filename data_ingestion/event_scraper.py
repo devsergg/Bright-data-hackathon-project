@@ -118,11 +118,11 @@ def _call_serp_api(url: str) -> dict:
         "Content-Type": "application/json",
         "Authorization": f"Bearer {config.BRIGHTDATA_API_TOKEN}",
     }
+    sep = "&" if "?" in url else "?"
     payload = {
         "zone": config.BRIGHTDATA_ZONE,
-        "url": url,
+        "url": f"{url}{sep}brd_json=1",
         "format": "raw",
-        "brd_json": 1,
     }
 
     last_exc: Exception | None = None

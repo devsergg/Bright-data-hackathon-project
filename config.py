@@ -1,21 +1,13 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Bright Data credentials ───────────────────────────────────────────────────
-# Set these before running:
-#   export BRIGHTDATA_API_TOKEN="your_bearer_token"
-#   export BRIGHTDATA_SERP_ZONE="your_serp_zone_name"       # e.g. "serp_api2"
-#   export BRIGHTDATA_UNLOCKER_ZONE="your_unlocker_zone"    # e.g. "web_unlocker1"
-#
-# Legacy single-zone fallback: BRIGHTDATA_ZONE still works if you haven't split yet.
+# Zones available on this account: mcp_unlocker, mcp_browser
+# Set BRIGHTDATA_ZONE in .env — all three scrapers read config.BRIGHTDATA_ZONE.
 BRIGHTDATA_API_TOKEN: str = os.environ["BRIGHTDATA_API_TOKEN"]
-BRIGHTDATA_SERP_ZONE: str = os.environ.get(
-    "BRIGHTDATA_SERP_ZONE",
-    os.environ.get("BRIGHTDATA_ZONE", "serp"),          # backward-compatible fallback
-)
-BRIGHTDATA_UNLOCKER_ZONE: str = os.environ.get(
-    "BRIGHTDATA_UNLOCKER_ZONE",
-    os.environ.get("BRIGHTDATA_ZONE", ""),              # falls back to same zone if not split
-)
+BRIGHTDATA_ZONE: str = os.environ.get("BRIGHTDATA_ZONE", "mcp_unlocker")
 
 # ── LLM / tracing keys ───────────────────────────────────────────────────────
 ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")

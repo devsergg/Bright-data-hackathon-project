@@ -34,7 +34,7 @@ FIELD_MAP = {
     "name": ["title", "name", "place_name"],
     "latitude": ["latitude", "lat", "location.lat"],
     "longitude": ["longitude", "lng", "lon", "location.lng", "location.lon"],
-    "current_status": ["current_status", "open_state", "business_status", "opening_hours.open_now"],
+    "current_status": ["work_status", "current_status", "open_state", "business_status", "opening_hours.open_now"],
     # Current busyness: 0-100 integer. May be absent if not currently open.
     "live_occupancy": ["live_occupancy", "current_popularity", "populartimes_now",
                        "busy_now", "live_busyness"],
@@ -46,7 +46,7 @@ FIELD_MAP = {
     # Place metadata (nice-to-have, not load-bearing tonight)
     "address": ["address", "full_address", "formatted_address"],
     "rating": ["rating", "average_rating"],
-    "review_count": ["reviews_count", "num_reviews", "review_count"],
+    "review_count": ["reviews_cnt", "reviews_count", "num_reviews", "review_count"],
 }
 
 _SERP_ENDPOINT = "https://api.brightdata.com/request"
@@ -79,13 +79,16 @@ def _parse_venue_record(raw: dict, venue: dict, scraped_at: str) -> dict:
     Convert a raw Bright Data JSON blob into our canonical VenueTelemetry dict.
     Stores the full raw response under 'raw_response' so nothing is lost.
     """
+    # Search-style responses wrap results under "organic"; unwrap to the first hit.
+    place = raw.get("organic", [raw])[0] if isinstance(raw.get("organic"), list) else raw
+
     record: dict = {
         "id": venue["id"],
         "scraped_at": scraped_at,
         "raw_response": raw,  # keep everything — field names can be corrected later
     }
     for field, candidates in FIELD_MAP.items():
-        record[field] = _extract_field(raw, candidates)
+        record[field] = _extract_field(place, candidates)
 
     # Fall back to venue list values for lat/lng/name when API doesn't return them
     if record.get("name") is None:
@@ -108,11 +111,11 @@ def _call_serp_api(maps_url: str) -> dict:
         "Content-Type": "application/json",
         "Authorization": f"Bearer {config.BRIGHTDATA_API_TOKEN}",
     }
+    sep = "&" if "?" in maps_url else "?"
     payload = {
         "zone": config.BRIGHTDATA_ZONE,
-        "url": maps_url,
+        "url": f"{maps_url}{sep}brd_json=1",
         "format": "raw",
-        "brd_json": 1,
     }
 
     last_exc: Exception | None = None
@@ -127,10 +130,14 @@ def _call_serp_api(maps_url: str) -> dict:
                 json=payload,
                 timeout=_REQUEST_TIMEOUT_S,
             )
-            resp.raise_for_status()
+            if not resp.ok:
+                logger.warning(
+                    "SERP API error for %s (attempt %d): %s — body: %s",
+                    maps_url, attempt, resp.status_code, resp.text[:500],
+                )
+                resp.raise_for_status()
             return resp.json()
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as exc:
-            logger.warning("SERP API error for %s (attempt %d): %s", maps_url, attempt, exc)
             last_exc = exc
 
     raise last_exc  # type: ignore[misc]
@@ -211,9 +218,8 @@ def trigger_micro_scrape(lat: float, lon: float, radius_meters: int = 200) -> li
             json.dumps(raw, indent=2, ensure_ascii=False)[:3000],
         )
 
-        # The search result may return a list of places or a single place dict.
-        # Normalise to a list.
-        places = raw if isinstance(raw, list) else raw.get("results", raw.get("places", [raw]))
+        # Response is {"general": {...}, "organic": [...]}; fall back gracefully.
+        places = raw.get("organic", raw.get("results", raw.get("places", [raw] if not isinstance(raw, list) else raw)))
         records: list[dict] = []
         for i, place in enumerate(places[:10]):  # cap at 10 results
             record: dict = {"scraped_at": scraped_at, "source": "micro_scrape",

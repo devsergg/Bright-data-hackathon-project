@@ -1,0 +1,64 @@
+# Account: ai-edu — educational AI tools & new releases.
+# Goal: build an audience tech companies want to partner with for UGC content,
+# and earn affiliate revenue on the tools covered.
+
+account: ai-edu
+display_name: "AI Toolbox Daily"
+niche: >
+  Educational short-form videos about AI tools and new releases: what launched,
+  what it does, who it's for, and one concrete thing you can do with it today.
+audience: "Builders, marketers, and curious professionals keeping up with AI"
+tone: >
+  Confident, fast-paced, zero fluff. Explain like a sharp friend, not a press
+  release. Concrete examples over adjectives. Hook in the first 2 seconds.
+
+video:
+  duration_seconds: 35
+  shots: 5                    # scenes per video
+  candidates_per_shot: 2      # cheap keyframe candidates judged for free
+  aspect_ratio: "9:16"
+
+# Higgsfield model ids. Defaults below are reasonable cheap choices — verify
+# current ids/costs with the Higgsfield MCP model listing before changing.
+models:
+  text_to_image: "bytedance/seedream/v4/text-to-image"
+  image_to_video: "bytedance/seedance/v1/lite/image-to-video"
+
+quality:
+  draft:
+    resolution: "480p"
+    duration: 4               # seconds per clip; ALWAYS set — defaults can be 12s
+  final_upgrade: false        # re-render winners at high quality (expensive)
+  final:
+    resolution: "720p"
+    duration: 5
+
+# A standard run estimates ~35 cr (5 shots x 2 candidates x 2.0 + 5 clips x 3.0)
+budget:
+  max_credits_per_run: 40
+  max_credits_per_day: 80
+
+sources:
+  rss:
+    - https://techcrunch.com/category/artificial-intelligence/feed/
+    - https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    - https://venturebeat.com/category/ai/feed/
+    - https://huggingface.co/blog/feed.xml
+
+publishing:
+  auto_post: false            # false = write to review queue only
+  platforms: [youtube, tiktok, instagram]
+  schedule_hint: "1 video/day, post 11:00 and 18:00 local on test A/B days"
+
+affiliate:
+  disclosure: "Some links are affiliate links — I may earn a commission at no cost to you."
+  # tool name (lowercase) -> affiliate or referral URL. The scriptwriter adds a
+  # CTA when the covered tool matches; metadata.json carries the link.
+  links: {}
+  fallback_cta: "Full breakdown + link in bio."
+
+partnership_pitch: >
+  I run {display_name}, a faceless short-form channel covering new AI tools for
+  builders and marketers. I'd love to create UGC-style explainer content for
+  {company}: same format as my organic videos, usage rights included. Recent
+  examples and audience stats attached.

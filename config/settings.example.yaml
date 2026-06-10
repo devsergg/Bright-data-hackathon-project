@@ -1,0 +1,15 @@
+# Copy to config/settings.yaml and adjust. settings.yaml is gitignored.
+
+claude:
+  model: claude-opus-4-8        # scripting, topic selection, visual judging
+
+paths:
+  data_dir: data
+
+# Estimated Higgsfield credit cost per call, by job kind. Used by the budget
+# guard to refuse calls that would exceed caps, and to report spend. Update
+# these as Higgsfield pricing changes (the MCP quotes live costs).
+credit_estimates:
+  text_to_image: 2.0
+  image_to_video_draft: 3.0
+  image_to_video_final: 12.0

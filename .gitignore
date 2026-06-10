@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Runtime data: runs, ledger, queues, downloaded media
+data/
+!data/.gitkeep
+
+# Secrets
+secrets/
+.env
+config/settings.yaml
+
+# OS
+.DS_Store

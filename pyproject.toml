@@ -1,0 +1,27 @@
+[project]
+name = "ugc-agent"
+version = "0.1.0"
+description = "Agentic faceless UGC video pipeline (Higgsfield + Claude)"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.92.0",
+    "higgsfield-client>=0.1.0",
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
+    "httpx>=0.27",
+    "feedparser>=6.0",
+]
+
+[project.optional-dependencies]
+youtube = ["google-api-python-client>=2.0", "google-auth-oauthlib>=1.0"]
+tts = ["edge-tts>=6.1"]
+
+[project.scripts]
+ugc-agent = "ugc_agent.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

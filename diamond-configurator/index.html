@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ring Studio — Design Your Diamond</title>
+    <meta name="description" content="Design a custom engagement or wedding ring with physically accurate, ray-traced diamonds." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Ring <em>Studio</em></div>
+      <div class="tag">Every facet ray-traced in real time</div>
+    </header>
+    <main class="layout">
+      <section id="viewer" aria-label="3D ring preview"></section>
+      <aside id="panel" aria-label="Ring options"></aside>
+    </main>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

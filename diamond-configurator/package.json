@@ -1,0 +1,24 @@
+{
+  "name": "diamond-configurator",
+  "version": "0.1.0",
+  "description": "Custom engagement & wedding ring configurator with physically based, ray-traced diamond rendering.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.16"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "private": true,
+  "type": "module"
+}

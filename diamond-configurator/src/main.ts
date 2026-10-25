@@ -140,6 +140,15 @@ function boot(): void {
     applyCheap(c);
     const gem = assembly.centerGem!;
     panel.showMetrics(gem.metrics);
+    if (rhino) {
+      // does the chosen stone fit the head the jeweller modelled?
+      const nominal = rhino.seatWidthsMm[0] || rhino.entry.nominalStoneMm;
+      if (rhino.entry.cuts?.length && !rhino.entry.cuts.includes(c.cut)) {
+        notify(`${rhino.entry.name} is designed for ${rhino.entry.cuts.join(', ')} stones`);
+      } else if (nominal && Math.abs(gem.metrics.widthMm - nominal) > 0.25) {
+        notify(`Stone is ${gem.metrics.widthMm.toFixed(2)} mm; this head is made for ${nominal.toFixed(2)} mm`);
+      }
+    }
     const ro = usRingSizeToInnerDiameter(c.ringSize) / 2 + c.bandThickness;
     viewer.setShadow(-ro - 0.05, ro * 3.2);
     if (!framed) {

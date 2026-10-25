@@ -91,12 +91,15 @@ export async function loadSetting(entry: SettingManifestEntry): Promise<LoadedSe
     const name = o.name || '';
     const upper = name.toUpperCase();
     if (upper.startsWith('SEAT')) {
-      // keep position + orientation, drop scale so the stone keeps its true size
-      const m = new Matrix4().compose(
-        o.getWorldPosition(new Vector3()),
-        o.getWorldQuaternion(new Quaternion()),
-        new Vector3(1, 1, 1),
-      );
+      // Prefer the marker triangle made by rhino/make_seat.py (exporter-proof);
+      // fall back to the node transform (empties from Blender etc.).
+      const m =
+        (o instanceof Mesh && seatFromTriangle(o)) ||
+        new Matrix4().compose(
+          o.getWorldPosition(new Vector3()),
+          o.getWorldQuaternion(new Quaternion()),
+          new Vector3(1, 1, 1),
+        );
       const seat = { m, name, mm: parseFloat(name.split('_').pop() ?? '') };
       (upper.startsWith('SEAT_CENTER') ? centre : others).push(seat);
       return;
@@ -118,4 +121,28 @@ export async function loadSetting(entry: SettingManifestEntry): Promise<LoadedSe
   }
 
   return { entry, root, metalMeshes, gemMeshes, seats, seatNames, seatWidthsMm, unitScale };
+}
+
+/**
+ * Decode a make_seat.py marker: a right triangle with a 1 mm leg along the
+ * stone's up axis and a 2 mm leg along its length, meeting at the girdle centre.
+ * Leg lengths are compared as a ratio, so the unit conversion doesn't matter.
+ */
+export function seatFromTriangle(mesh: Mesh): Matrix4 | null {
+  const pos = mesh.geometry.getAttribute('position');
+  if (!pos || pos.count < 3) return null;
+  const v = [0, 1, 2].map((i) => new Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld));
+  for (let i = 0; i < 3; i++) {
+    const o = v[i];
+    const a = v[(i + 1) % 3].clone().sub(o);
+    const b = v[(i + 2) % 3].clone().sub(o);
+    if (Math.abs(a.clone().normalize().dot(b.clone().normalize())) > 0.05) continue; // not the right angle
+    const [up, len] = a.length() < b.length() ? [a, b] : [b, a];
+    if (Math.abs(len.length() / up.length() - 2) > 0.1) continue;
+    const y = up.normalize();
+    const z = len.normalize();
+    const x = new Vector3().crossVectors(y, z);
+    return new Matrix4().makeBasis(x, y, z).setPosition(o);
+  }
+  return null;
 }

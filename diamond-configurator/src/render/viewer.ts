@@ -124,7 +124,7 @@ export class Viewer {
     const d = radius * 3.4;
     const dirs: Record<ViewPreset, Vector3> = {
       hero: new Vector3(0.55, 0.42, 0.72),
-      top: new Vector3(0, 1, 0.0001),
+      top: new Vector3(0, 1, -0.0001), // +Z (fingertip direction) at the top of the screen
       side: new Vector3(1, 0.08, 0),
       front: new Vector3(0, 0.08, 1),
       hand: new Vector3(0.15, 0.62, 0.77),

@@ -49,7 +49,13 @@ export interface RingConfig {
   quality: QualityLevel;
   bloom: boolean;
   autoRotate: boolean;
+  /** Try-on: show the ring on a finger. */
+  showFinger: boolean;
+  /** Index into SKIN_TONES. */
+  skinTone: number;
 }
+
+export const SKIN_TONES = ['#f3cfb3', '#e0ac85', '#bf8660', '#93603f', '#5f3c27'];
 
 export const DEFAULT_CONFIG: RingConfig = {
   cut: 'round',
@@ -77,6 +83,8 @@ export const DEFAULT_CONFIG: RingConfig = {
   quality: 'high',
   bloom: true,
   autoRotate: true,
+  showFinger: false,
+  skinTone: 1,
 };
 
 /** Apply a cut change: reset ratio and proportions to that cut's defaults. */
@@ -137,5 +145,9 @@ export function configFromLocation(): RingConfig {
 }
 
 export function writeLocation(cfg: RingConfig): void {
-  history.replaceState(null, '', `#c=${encodeConfig(cfg)}`);
+  try {
+    history.replaceState(null, '', `#c=${encodeConfig(cfg)}`);
+  } catch {
+    // sandboxed frames may refuse URL changes; the design still lives in memory
+  }
 }

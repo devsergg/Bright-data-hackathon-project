@@ -1,13 +1,26 @@
 import './ui/styles.css';
 import { Box3, Vector3 } from 'three';
-import { exportGemOBJ, exportGemSTL, exportRingGLB, exportSpecJSON, download } from './export/exporters';
+import { exportGemOBJ, exportGemSTL, exportRingGLB, exportSpecJSON } from './export/exporters';
 import { analyzeLight, GemTracer } from './gems/lightPerformance';
 import type { DiamondQuality } from './render/diamondMaterial';
 import { Viewer, type ViewPreset } from './render/viewer';
 import { RingAssembly } from './ring/assembly';
 import { loadManifest, loadSetting, type LoadedSetting, type SettingManifestEntry } from './ring/rhinoSetting';
-import { configFromLocation, encodeConfig, Store, writeLocation, type QualityLevel, type RingConfig } from './state';
-import { Panel } from './ui/panel';
+import { COLLECTION, designConfig } from './showcase/collections';
+import {
+  configFromLocation,
+  DEFAULT_CONFIG,
+  encodeConfig,
+  SKIN_TONES,
+  Store,
+  writeLocation,
+  type QualityLevel,
+  type RingConfig,
+} from './state';
+import { Builder } from './ui/builder';
+import { mountCollections, SavedDesigns } from './ui/gallery';
+import { photoModal, shareModal } from './ui/modal';
+import { mountStageControls } from './ui/stage';
 import { channelIORs, usRingSizeToInnerDiameter } from './units';
 
 const QUALITY: Record<QualityLevel, DiamondQuality & { dpr: number }> = {
@@ -27,24 +40,44 @@ const CHEAP_KEYS = new Set<keyof RingConfig>([
   'autoRotate',
   'clarity',
   'engraving',
+  'showFinger',
+  'skinTone',
 ]);
+
+/** Small square JPEG for the saved-designs list. */
+async function thumbnail(dataUrl: string, size = 240): Promise<string> {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const s = Math.min(img.naturalWidth, img.naturalHeight);
+  c.getContext('2d')!.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', 0.8);
+}
 
 function boot(): void {
   const viewerEl = document.getElementById('viewer')!;
-  const panelEl = document.getElementById('panel')!;
+  const stageEl = document.getElementById('stage')!;
+  const builderEl = document.getElementById('builder')!;
   const toast = document.getElementById('toast')!;
+  const params = new URLSearchParams(location.search);
+  // ?capture=<design id>: render-only stage, used to make the Collections thumbnails
+  const capture = params.get('capture');
+  if (capture) document.body.classList.add('capture');
 
   if (!document.createElement('canvas').getContext('webgl2')) {
     viewerEl.innerHTML = '<p class="fatal">This viewer needs WebGL 2. Please use a current Chrome, Safari, Edge or Firefox.</p>';
     return;
   }
 
-  const initial = configFromLocation();
+  const design = capture ? COLLECTION.find((d) => d.id === capture) : undefined;
+  const initial = design ? designConfig(design) : configFromLocation();
   // ?quality=low|medium|high overrides; phones default to medium
-  const qp = new URLSearchParams(location.search).get('quality') as QualityLevel | null;
+  const qp = params.get('quality') as QualityLevel | null;
   if (qp && qp in QUALITY) initial.quality = qp;
   else if (!location.hash && matchMedia('(pointer: coarse)').matches) initial.quality = 'medium';
-  if (new URLSearchParams(location.search).has('still')) initial.autoRotate = false;
+  if (params.has('still') || capture) initial.autoRotate = false;
   const store = new Store(initial);
   const viewer = new Viewer(viewerEl);
   let cfg = store.get();
@@ -68,36 +101,38 @@ function boot(): void {
     const box = new Box3().setFromObject(assembly.group);
     const center = box.getCenter(new Vector3());
     const stone = assembly.centerStone?.getWorldPosition(new Vector3());
-    if (stone) center.lerp(stone, 0.4);
-    return { center, radius: (box.getSize(new Vector3()).length() / 2) * 0.78 };
+    if (stone) center.lerp(stone, 0.25);
+    return { center, radius: (box.getSize(new Vector3()).length() / 2) * 0.92 };
   };
 
-  const panel = new Panel(panelEl, store, {
-    onView: (v: ViewPreset) => {
-      const b = sceneBounds();
-      if (v === 'top' || v === 'side' || v === 'front') {
-        // focus on the centre stone for detail views
-        const s = assembly.centerStone!;
-        const c = new Vector3();
-        s.getWorldPosition(c);
-        viewer.setView(v, c, Math.max(5, assembly.centerGem!.metrics.lengthMm * 1.1));
-      } else viewer.setView(v, b.center, b.radius);
+  const setView = (v: ViewPreset) => {
+    const b = sceneBounds();
+    if (v === 'top' || v === 'side' || v === 'front') {
+      // focus on the centre stone for detail views
+      const c = new Vector3();
+      assembly.centerStone!.getWorldPosition(c);
+      viewer.setView(v, c, Math.max(5, assembly.centerGem!.metrics.lengthMm * 1.1));
+    } else viewer.setView(v, b.center, b.radius);
+  };
+
+  const shareUrl = () => `${location.origin}${location.pathname}#c=${encodeConfig(store.get())}`;
+  const studio = document.getElementById('studio')!;
+  const openInStudio = () => {
+    builder.goTo('review');
+    studio.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+
+  const builder = new Builder(builderEl, store, {
+    onShare: () => shareModal(shareUrl()),
+    onPhoto: () => photoModal(viewer.snapshot(), `ring-${store.get().cut}.png`),
+    onSave: async () => {
+      const ok = saved.save(store.get(), await thumbnail(viewer.snapshot()));
+      notify(ok ? 'Saved to this browser' : 'This browser blocks saving — copy a share link instead');
     },
-    onShare: async () => {
-      const url = `${location.origin}${location.pathname}#c=${encodeConfig(store.get())}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        notify('Share link copied');
-      } catch {
-        prompt('Copy this link', url);
-      }
-    },
-    onSnapshot: () => {
-      const data = viewer.snapshot();
-      const bin = atob(data.split(',')[1]);
-      const buf = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-      download(buf, `ring-${store.get().cut}.png`, 'image/png');
+    onReset: () => {
+      const c = store.get();
+      store.set({ ...DEFAULT_CONFIG, environment: c.environment, quality: c.quality, showFinger: c.showFinger, skinTone: c.skinTone });
+      builder.goTo('shape');
     },
     onExport: (kind) => {
       const gem = assembly.centerGem!;
@@ -107,16 +142,27 @@ function boot(): void {
       if (kind === 'glb') void exportRingGLB(assembly.group, `ring-${store.get().cut}`);
     },
   });
+    mountStageControls(stageEl, store, { onView: setView });
+  mountCollections(document.getElementById('collection-grid')!, store, openInStudio);
+  const saved = new SavedDesigns(document.getElementById('saved-grid')!, store, openInStudio);
+
+  // the studio backdrop follows the page theme
+  const syncBackdrop = () => {
+    const cs = getComputedStyle(document.documentElement);
+    viewer.setBackdrop([cs.getPropertyValue('--stage-in').trim(), cs.getPropertyValue('--stage-out').trim()]);
+  };
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncBackdrop);
+  new MutationObserver(syncBackdrop).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   // ---------------------------------------------------------------- light analysis (debounced, idle)
   let lightTimer = 0;
   const scheduleLight = () => {
-    panel.showLight(null);
+    builder.showLight(null);
     clearTimeout(lightTimer);
     lightTimer = window.setTimeout(() => {
       const gem = assembly.centerGem;
       if (!gem || !assembly.centerBVH) return;
-      panel.showLight(analyzeLight(gem, 72, new GemTracer(gem, assembly.centerBVH)));
+      builder.showLight(analyzeLight(gem, 72, new GemTracer(gem, assembly.centerBVH)));
     }, 350);
   };
 
@@ -132,6 +178,7 @@ function boot(): void {
     viewer.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.dpr));
     viewer.bloomEnabled = c.bloom;
     viewer.controls.autoRotate = c.autoRotate;
+    viewer.setFinger(c.showFinger, usRingSizeToInnerDiameter(c.ringSize), SKIN_TONES[c.skinTone] ?? SKIN_TONES[1]);
   };
 
   const rebuild = (c: RingConfig) => {
@@ -139,7 +186,7 @@ function boot(): void {
     assembly.update(c, rhino);
     applyCheap(c);
     const gem = assembly.centerGem!;
-    panel.showMetrics(gem.metrics);
+    builder.showMetrics(gem.metrics);
     if (rhino) {
       // does the chosen stone fit the head the jeweller modelled?
       const nominal = rhino.seatWidthsMm[0] || rhino.entry.nominalStoneMm;
@@ -185,11 +232,19 @@ function boot(): void {
     urlTimer = window.setTimeout(() => writeLocation(next), 400);
   });
 
+  syncBackdrop();
   rebuild(cfg);
+  if (capture) {
+    // signal the thumbnail script once a few frames have rendered
+    let frames = 0;
+    viewer.addFrameCallback(() => {
+      if (++frames === 12) document.body.dataset.ready = '1';
+    });
+  }
 
   void loadManifest().then((m) => {
     manifest.push(...m);
-    panel.setManifest(m);
+    builder.setManifest(m);
     void ensureRhino(store.get());
   });
 

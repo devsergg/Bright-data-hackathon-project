@@ -5,6 +5,9 @@ import {
   ACESFilmicToneMapping,
   BufferGeometry,
   CanvasTexture,
+  CapsuleGeometry,
+  Color,
+  MeshPhysicalMaterial,
   Line,
   LineBasicMaterial,
   Mesh,
@@ -43,6 +46,9 @@ export class Viewer {
   private tween: { from: Vector3; to: Vector3; t0: number; dur: number } | null = null;
   private readonly container: HTMLElement;
   private onFrame: (() => void)[] = [];
+  private finger: Mesh;
+  private backdropOverride: [string, string] | null = null;
+  private envId: EnvironmentId | null = null;
   bloomEnabled = true;
 
   constructor(container: HTMLElement) {
@@ -73,6 +79,10 @@ export class Viewer {
     this.shadow = makeContactShadow();
     this.scene.add(this.shadow);
 
+    this.finger = makeFinger();
+    this.finger.visible = false;
+    this.scene.add(this.finger);
+
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
     this.renderer.setAnimationLoop(() => this.frame());
@@ -86,11 +96,42 @@ export class Viewer {
     }
     this.env = env;
     this.scene.environment = env.pmrem;
-    const [inner, outer] = ENVIRONMENTS[id].background;
+    if (this.envId !== id) {
+      this.envId = id;
+      this.applyBackdrop();
+    }
+    return env;
+  }
+
+  /**
+   * Override the studio backdrop (e.g. to follow the page's light/dark theme).
+   * Only the neutral studio preset is overridden; mood presets keep their own.
+   */
+  setBackdrop(colors: [string, string] | null): void {
+    this.backdropOverride = colors;
+    this.applyBackdrop();
+  }
+
+  private applyBackdrop(): void {
+    if (!this.envId) return;
+    const own = ENVIRONMENTS[this.envId].background;
+    const [inner, outer] = this.envId === 'studio' && this.backdropOverride ? this.backdropOverride : own;
     if (this.scene.background instanceof CanvasTexture) this.scene.background.dispose();
     this.scene.background = makeBackdrop(inner, outer);
     this.container.style.background = outer;
-    return env;
+  }
+
+  /** Try-on finger running through the band (finger axis = Z, fingertip toward +Z). */
+  setFinger(visible: boolean, innerDiameterMm: number, skin: string): void {
+    this.finger.visible = visible;
+    const r = innerDiameterMm / 2 - 0.05;
+    if (Math.abs((this.finger.userData.r ?? 0) - r) > 1e-3) {
+      this.finger.geometry.dispose();
+      this.finger.geometry = fingerGeometry(r);
+      this.finger.userData.r = r;
+    }
+    (this.finger.material as MeshPhysicalMaterial).color.set(new Color(skin));
+    this.shadow.visible = !visible;
   }
 
   /** Rotate the PMREM used by metals together with the gem environment. */
@@ -121,13 +162,16 @@ export class Viewer {
 
   /** Smoothly move the camera to a preset viewpoint around `target`. */
   setView(view: ViewPreset, target: Vector3, radius: number): void {
-    const d = radius * 3.4;
+    // distance that fits a sphere of `radius` in the narrower of the two fields of view
+    const vfov = (this.camera.fov * Math.PI) / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
+    const d = (radius / Math.sin(Math.min(vfov, hfov) / 2)) * 0.92;
     const dirs: Record<ViewPreset, Vector3> = {
       hero: new Vector3(0.55, 0.42, 0.72),
       top: new Vector3(0, 1, -0.0001), // +Z (fingertip direction) at the top of the screen
       side: new Vector3(1, 0.08, 0),
       front: new Vector3(0, 0.08, 1),
-      hand: new Vector3(0.15, 0.62, 0.77),
+      hand: new Vector3(0.18, 0.74, -0.62), // from the wrist, fingertip pointing away
     };
     this.controls.target.copy(target);
     this.tween = {
@@ -207,6 +251,30 @@ function makeBackdrop(inner: string, outer: string): CanvasTexture {
   const tex = new CanvasTexture(c);
   tex.colorSpace = SRGBColorSpace;
   return tex;
+}
+
+/** Capsule ~70 mm long, from knuckle to fingertip, along Z. */
+function fingerGeometry(r: number): CapsuleGeometry {
+  const g = new CapsuleGeometry(r, 70 - 2 * r, 12, 48);
+  g.rotateX(Math.PI / 2);
+  return g;
+}
+
+function makeFinger(): Mesh {
+  const g = fingerGeometry(8);
+  const mat = new MeshPhysicalMaterial({
+    color: 0xe0ac85,
+    roughness: 0.72,
+    sheen: 0.25,
+    sheenRoughness: 0.6,
+    sheenColor: new Color(1, 0.8, 0.72),
+    clearcoat: 0.05,
+    clearcoatRoughness: 0.7,
+  });
+  const m = new Mesh(g, mat);
+  m.position.z = -12;
+  m.name = 'finger';
+  return m;
 }
 
 /** Soft radial contact shadow under the ring. */

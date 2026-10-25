@@ -2,25 +2,69 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ring Studio — Design Your Diamond</title>
-    <meta name="description" content="Design a custom engagement or wedding ring with physically accurate, ray-traced diamonds." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Ring Studio</title>
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <meta name="description" content="Design an engagement or wedding ring and see every facet ray-traced in real time." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
     />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">Ring <em>Studio</em></div>
-      <div class="tag">Every facet ray-traced in real time</div>
+    <header class="site-head">
+      <div class="head-inner">
+        <a class="wordmark" href="#studio">Ring <em>Studio</em></a>
+        <nav aria-label="Sections">
+          <a href="#studio">Design</a>
+          <a href="#collections">Collections</a>
+          <a href="#saved">Saved</a>
+        </nav>
+      </div>
     </header>
-    <main class="layout">
-      <section id="viewer" aria-label="3D ring preview"></section>
-      <aside id="panel" aria-label="Ring options"></aside>
+
+    <main>
+      <section id="studio" class="studio" aria-label="Ring designer">
+        <div class="studio-grid">
+          <div id="stage" class="stage">
+            <div id="viewer" class="viewer" aria-label="3D preview of your ring"></div>
+          </div>
+          <aside id="builder" class="builder" aria-label="Design steps"></aside>
+        </div>
+      </section>
+
+      <section id="collections" class="band-section">
+        <div class="section-inner">
+          <header class="section-head">
+            <h2>Collections</h2>
+            <p>Start from a finished design and make it yours. Every image is rendered by the same engine as the designer.</p>
+          </header>
+          <div id="collection-grid" class="design-grid"></div>
+        </div>
+      </section>
+
+      <section id="saved" class="band-section alt">
+        <div class="section-inner">
+          <header class="section-head">
+            <h2>Saved designs</h2>
+            <p>Kept in this browser. Share a link to move a design to another device.</p>
+          </header>
+          <div id="saved-grid" class="saved-grid"></div>
+        </div>
+      </section>
     </main>
+
+    <footer class="site-foot">
+      <div class="section-inner">
+        <p>
+          Each diamond is ray-traced through its true facet geometry, using diamond’s refractive index of 2.417 and
+          its dispersion of 0.044. Carat weights come from the stone’s volume at 3.52 g/cm³.
+        </p>
+      </div>
+    </footer>
+
     <div id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

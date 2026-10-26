@@ -403,6 +403,21 @@ def world(color, strength):
     bpy.context.scene.world = w
 
 
+def camera_sees_black():
+    """Background reads black to camera rays only; reflections still see the lit world."""
+    nt = bpy.context.scene.world.node_tree
+    bg = nt.nodes["Background"]
+    out = nt.nodes["World Output"]
+    lp = nt.nodes.new("ShaderNodeLightPath")
+    black = nt.nodes.new("ShaderNodeBackground")
+    black.inputs["Color"].default_value = (0.004, 0.004, 0.005, 1)
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(lp.outputs["Is Camera Ray"], mix.inputs[0])
+    nt.links.new(bg.outputs[0], mix.inputs[1])
+    nt.links.new(black.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], out.inputs["Surface"])
+
+
 def camera(loc, target, lens, fstop, focus):
     cam = bpy.data.cameras.new("Camera")
     cam.lens = lens
@@ -512,8 +527,10 @@ def shot_faceup(gem_z, R):
     """Macro straight down onto the table: arrows pattern, brilliance, fire."""
     bpy.context.scene.cycles.caustics_refractive = False  # the floor isn't the subject here
     floor_z = -(INNER_R + BAND_T_BOTTOM)
-    cyclorama(mat_principled("Black", (0.002, 0.002, 0.0025), 1.0), floor_z)
+    sweep = cyclorama(mat_principled("Black", (0.002, 0.002, 0.0025), 1.0), floor_z)
+    sweep.visible_camera = False  # the stone still reflects the room; the camera sees black velvet
     world((0.85, 0.86, 0.88), 0.9)
+    camera_sees_black()
     bpy.context.scene.view_settings.exposure = 0.9
     head = (0, 0, gem_z)
     # jewellery-store spots at 40–60° elevation around the stone

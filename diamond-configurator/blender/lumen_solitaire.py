@@ -512,15 +512,16 @@ def shot_faceup(gem_z, R):
     """Macro straight down onto the table: arrows pattern, brilliance, fire."""
     bpy.context.scene.cycles.caustics_refractive = False  # the floor isn't the subject here
     floor_z = -(INNER_R + BAND_T_BOTTOM)
-    cyclorama(mat_principled("Black", (0.012, 0.012, 0.014), 0.8), floor_z)
+    cyclorama(mat_principled("Black", (0.002, 0.002, 0.0025), 1.0), floor_z)
     world((0.85, 0.86, 0.88), 0.9)
+    bpy.context.scene.view_settings.exposure = 0.9
     head = (0, 0, gem_z)
     # jewellery-store spots at 40–60° elevation around the stone
     for i in range(8):
         a = 2 * math.pi * i / 8 + 0.2
         el = math.radians(45 + 12 * (i % 2))
         loc = (math.cos(el) * math.cos(a) * 160, math.cos(el) * math.sin(a) * 160, gem_z + math.sin(el) * 160)
-        spot(f"Spot{i}", loc, head, 6.0e5, 6, radius=0.6)
+        spot(f"Spot{i}", loc, head, 1.8e6, 6, radius=0.5)
     area_light("Dome", (0, 0, gem_z + 200), head, (260, 260), 9.0e5, shape="DISK")
     # the camera and photographer seen in the stone (ASET's blue zone)
     card("Lens", (0, 0, gem_z + 120), head, (45, 45), mat_principled("Lens", (0.01, 0.01, 0.01), 0.4))

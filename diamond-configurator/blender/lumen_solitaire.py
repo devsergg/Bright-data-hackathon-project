@@ -493,8 +493,8 @@ def shot_velvet(gem_z, R):
     ring_c = (0, 0, gem_z * 0.35)
     ring_only(
         # large softboxes the stone reflects: brilliance
-        area_light("Softbox", (-30, 60, 210), head, (140, 140), 3.2e6),
-        area_light("FrontSoft", (-70, 170, 110), head, (90, 90), 1.4e6, color=(0.97, 0.98, 1.0)),
+        area_light("Softbox", (-30, 60, 210), head, (160, 160), 6.0e6),
+        area_light("FrontSoft", (-90, 160, 170), head, (110, 110), 3.0e6, color=(0.97, 0.98, 1.0)),
         area_light("Strip", (160, 60, 120), ring_c, (30, 200), 1.6e6),
         area_light("Rim", (0, -220, 80), ring_c, (180, 40), 1.6e6, color=(1.0, 0.9, 0.86)),
         # small hard spots: fire
@@ -505,7 +505,7 @@ def shot_velvet(gem_z, R):
     )
     # a soft pool of light on the velvet under the ring
     spot("Pool", (0, 30, 260), (0, 0, floor_z), 4.0e6, 20, radius=30, color=(1.0, 0.92, 0.9))
-    camera((-62, 98, 42), (0, 0, gem_z * 0.40), 100, 16, head)
+    camera((-56, 90, 68), (0, 0, gem_z * 0.42), 100, 16, head)
 
 
 def shot_faceup(gem_z, R):

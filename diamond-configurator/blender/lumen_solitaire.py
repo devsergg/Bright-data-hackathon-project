@@ -434,28 +434,65 @@ def camera(loc, target, lens, fstop, focus):
     return ob
 
 
-def setup_render(samples, res):
+def use_gpu():
+    """Turn on every Metal/OptiX/CUDA/HIP device Cycles can find; return True if any."""
+    try:
+        prefs = bpy.context.preferences.addons["cycles"].preferences
+    except KeyError:
+        return False
+    for kind in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
+        try:
+            prefs.compute_device_type = kind
+        except TypeError:
+            continue
+        prefs.get_devices()
+        gpus = [d for d in prefs.devices if d.type == kind]
+        if gpus:
+            for d in prefs.devices:
+                d.use = d.type == kind
+            print("cycles device:", kind, ", ".join(d.name for d in gpus))
+            return True
+    return False
+
+
+def setup_render(samples, res, caustics=False):
     s = bpy.context.scene
     s.render.engine = "CYCLES"
     s.unit_settings.system = "METRIC"
     s.unit_settings.scale_length = 0.001
     s.unit_settings.length_unit = "MILLIMETERS"
     c = s.cycles
-    c.device = "CPU"
+    c.device = "GPU" if use_gpu() else "CPU"
     c.samples = samples
     c.use_adaptive_sampling = True
     c.adaptive_threshold = 0.006
     c.use_denoising = True
     c.denoiser = "OPENIMAGEDENOISE"
+    c.denoising_input_passes = "RGB_ALBEDO_NORMAL"
+    c.denoising_prefilter = "ACCURATE"
+    c.denoising_use_gpu = True
+    # Viewport (Z > Rendered): denoise from the first sample so it reads clean while orbiting.
+    c.preview_samples = 256
+    c.use_preview_adaptive_sampling = True
+    c.preview_adaptive_threshold = 0.02
+    c.use_preview_denoising = True
+    c.preview_denoiser = "OPENIMAGEDENOISE"
+    c.preview_denoising_input_passes = "RGB_ALBEDO_NORMAL"
+    c.preview_denoising_start_sample = 1
+    c.preview_denoising_use_gpu = True
+    s.render.use_persistent_data = True
     c.max_bounces = 48
     c.diffuse_bounces = 4
     c.glossy_bounces = 24
     c.transmission_bounces = 32
     c.transparent_max_bounces = 8
+    # Caustics through the stone onto the floor/backdrop are the main firefly source;
+    # the stone's own fire comes from camera rays and is unaffected.
     c.caustics_reflective = True
-    c.caustics_refractive = True
-    c.blur_glossy = 0.4
-    c.sample_clamp_indirect = 12
+    c.caustics_refractive = caustics
+    c.blur_glossy = 1.0
+    c.sample_clamp_direct = 0
+    c.sample_clamp_indirect = 8
     c.use_light_tree = True
     s.render.resolution_x, s.render.resolution_y = res
     s.render.resolution_percentage = 100
@@ -525,7 +562,6 @@ def shot_velvet(gem_z, R):
 
 def shot_faceup(gem_z, R):
     """Macro straight down onto the table: arrows pattern, brilliance, fire."""
-    bpy.context.scene.cycles.caustics_refractive = False  # the floor isn't the subject here
     floor_z = -(INNER_R + BAND_T_BOTTOM)
     sweep = cyclorama(mat_principled("Black", (0.002, 0.002, 0.0025), 1.0), floor_z)
     sweep.visible_camera = False  # the stone still reflects the room; the camera sees black velvet
@@ -555,11 +591,12 @@ def main(argv):
     ap.add_argument("--res", default="1600x1200")
     ap.add_argument("--out", default="")
     ap.add_argument("--save", default="", help="save the .blend here")
+    ap.add_argument("--caustics", action="store_true", help="refractive caustics (slower, noisier)")
     a = ap.parse_args(argv)
     res = tuple(int(x) for x in a.res.split("x"))
 
     clear_scene()
-    setup_render(a.samples, res)
+    setup_render(a.samples, res, a.caustics)
     stone, gem_z, R = build_ring()
     SHOTS[a.shot](gem_z, R)
     if a.save:

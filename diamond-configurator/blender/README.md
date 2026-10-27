@@ -30,9 +30,20 @@ blender -b -P blender/lumen_solitaire.py -- --shot studio --samples 1024 --res 2
 python blender/lumen_solitaire.py --shot velvet --out renders/velvet.png
 ```
 
-The included renders were made on a 4-core CPU at 512 samples, roughly 20 minutes each. On
-your machine, switch Cycles to the GPU (Preferences → System → CUDA/OptiX/Metal) and use
-1024–2048 samples; the fine coloured speckle in the stone (fire) settles as samples rise.
+The script picks the GPU automatically (Metal on Apple Silicon, then OptiX/CUDA/HIP) and
+falls back to CPU. On an M1 Max a 1600×1200 frame at 384 samples takes about 3 minutes; the
+first run after a Blender update spends an extra minute or two compiling Metal kernels.
+
+Noise controls, already set:
+- OpenImageDenoise with albedo + normal passes for final renders, and in the viewport from
+  sample 1 (Z → Rendered stays clean while you orbit).
+- Refractive caustics are off. Light focused through the stone onto the floor is the main
+  firefly source, and the stone's own fire comes from camera rays, so it is unaffected.
+  Pass `--caustics` to turn them back on (needs far more samples).
+- Indirect clamp 8 and filter-glossy 1.0 to tame the remaining hot paths.
+
+For a hero still, raise `--samples` to 1024–2048; the fine coloured speckle in the stone
+(fire) settles as samples rise.
 
 ## Lighting, shot by shot
 

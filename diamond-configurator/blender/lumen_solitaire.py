@@ -114,30 +114,60 @@ def sphere(name, center, r, mat):
 
 # ------------------------------------------------------------------ materials
 def mat_diamond():
+    """Clear glass at the green-channel IOR. Converges fast, so the viewport stays clean.
+
+    Fire (dispersion) is added at final-render time by render_with_fire(), which renders
+    once per RGB channel at that channel's IOR and merges the channels. Mixing three
+    tinted glass lobes in one shader looks the same in theory, but every internal bounce
+    re-picks a lobe and mismatched picks kill the path, which is pure rainbow noise.
+    """
     m = bpy.data.materials.new("Diamond")
     m.use_nodes = True
     nt = m.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")
-    # dispersion: three glass lobes, one per channel, each with its own IOR.
-    # Path tracing picks lobes stochastically; mixed-channel paths cancel,
-    # so each wavelength band refracts at its own angle → real fire.
-    add1 = nt.nodes.new("ShaderNodeAddShader")
-    add2 = nt.nodes.new("ShaderNodeAddShader")
-    lobes = []
-    for ior, col in zip(IOR_RGB, [(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1)]):
-        g = nt.nodes.new("ShaderNodeBsdfGlass")
-        g.distribution = "SHARP" if "SHARP" in [i.identifier for i in g.bl_rna.properties["distribution"].enum_items] else "GGX"
-        g.inputs["IOR"].default_value = ior
-        g.inputs["Roughness"].default_value = 0.0
-        g.inputs["Color"].default_value = col
-        lobes.append(g)
-    nt.links.new(lobes[0].outputs[0], add1.inputs[0])
-    nt.links.new(lobes[1].outputs[0], add1.inputs[1])
-    nt.links.new(add1.outputs[0], add2.inputs[0])
-    nt.links.new(lobes[2].outputs[0], add2.inputs[1])
-    nt.links.new(add2.outputs[0], out.inputs["Surface"])
+    g = nt.nodes.new("ShaderNodeBsdfGlass")
+    g.name = "DiamondGlass"
+    g.distribution = "SHARP" if "SHARP" in [i.identifier for i in g.bl_rna.properties["distribution"].enum_items] else "GGX"
+    g.inputs["IOR"].default_value = IOR_RGB[1]
+    g.inputs["Roughness"].default_value = 0.0
+    nt.links.new(g.outputs[0], out.inputs["Surface"])
     return m
+
+
+def render_with_fire(path):
+    """Render R, G and B at their own diamond IOR (linear EXR) and merge to one image."""
+    import numpy as np
+
+    s = bpy.context.scene
+    glass = bpy.data.materials["Diamond"].node_tree.nodes["DiamondGlass"].inputs["IOR"]
+    fmt = s.render.image_settings
+    keep = fmt.file_format, fmt.color_depth
+    fmt.file_format, fmt.color_depth = "OPEN_EXR", "32"
+    base = os.path.splitext(path)[0]
+    merged = None
+    for ch, ior in enumerate(IOR_RGB):
+        glass.default_value = ior
+        print(f"fire pass {'RGB'[ch]}  IOR {ior:.4f}")
+        bpy.ops.render.render()
+        tmp = f"{base}.{'rgb'[ch]}.exr"
+        bpy.data.images["Render Result"].save_render(tmp, scene=s)
+        img = bpy.data.images.load(tmp)
+        px = np.empty(len(img.pixels), dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(-1, 4)
+        if merged is None:
+            merged = px.copy()
+        merged[:, ch] = px[:, ch]
+        bpy.data.images.remove(img)
+        os.remove(tmp)
+    glass.default_value = IOR_RGB[1]
+    fmt.file_format, fmt.color_depth = keep
+    w, h = s.render.resolution_x, s.render.resolution_y
+    out = bpy.data.images.new("FireMerged", w, h, alpha=True, float_buffer=True)
+    out.colorspace_settings.name = "Linear Rec.709"
+    out.pixels.foreach_set(merged.ravel())
+    out.save_render(path, scene=s)  # applies AgX / look from the scene
 
 
 def mat_platinum(rough=0.075):
@@ -472,9 +502,9 @@ def setup_render(samples, res, caustics=False):
     c.denoising_prefilter = "ACCURATE"
     c.denoising_use_gpu = True
     # Viewport (Z > Rendered): denoise from the first sample so it reads clean while orbiting.
-    c.preview_samples = 256
+    c.preview_samples = 512
     c.use_preview_adaptive_sampling = True
-    c.preview_adaptive_threshold = 0.02
+    c.preview_adaptive_threshold = 0.01
     c.use_preview_denoising = True
     c.preview_denoiser = "OPENIMAGEDENOISE"
     c.preview_denoising_input_passes = "RGB_ALBEDO_NORMAL"
@@ -592,6 +622,7 @@ def main(argv):
     ap.add_argument("--out", default="")
     ap.add_argument("--save", default="", help="save the .blend here")
     ap.add_argument("--caustics", action="store_true", help="refractive caustics (slower, noisier)")
+    ap.add_argument("--no-fire", action="store_true", help="single pass, no dispersion (3x faster)")
     a = ap.parse_args(argv)
     res = tuple(int(x) for x in a.res.split("x"))
 
@@ -603,8 +634,11 @@ def main(argv):
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(a.save))
         print("saved", a.save)
     if a.out:
-        bpy.context.scene.render.filepath = os.path.abspath(a.out)
-        bpy.ops.render.render(write_still=True)
+        if a.no_fire:
+            bpy.context.scene.render.filepath = os.path.abspath(a.out)
+            bpy.ops.render.render(write_still=True)
+        else:
+            render_with_fire(os.path.abspath(a.out))
         print("rendered", a.out)
 
 

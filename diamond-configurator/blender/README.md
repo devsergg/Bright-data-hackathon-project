@@ -41,6 +41,10 @@ Noise controls, already set:
   firefly source, and the stone's own fire comes from camera rays, so it is unaffected.
   Pass `--caustics` to turn them back on (needs far more samples).
 - Indirect clamp 8 and filter-glossy 1.0 to tame the remaining hot paths.
+- Fire without rainbow noise: the Diamond material is plain glass at the green IOR (fast,
+  clean viewport). `--out` renders the frame three times, once per RGB channel at that
+  channel's IOR, and merges them. That costs 3× time; `--no-fire` skips it. A one-shader
+  version (three tinted glass lobes) kills most paths inside the stone and never converges.
 
 For a hero still, raise `--samples` to 1024–2048; the fine coloured speckle in the stone
 (fire) settles as samples rise.

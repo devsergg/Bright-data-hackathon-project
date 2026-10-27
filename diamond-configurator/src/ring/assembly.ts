@@ -21,6 +21,7 @@ import { DiamondMaterial, type DiamondQuality } from '../render/diamondMaterial'
 import { applyMetal, makeMetalMaterial } from '../render/metals';
 import type { RingConfig } from '../state';
 import { usRingSizeToInnerDiameter } from '../units';
+import { CAST_LEAN_DEG, prongDiameter } from './metallurgy';
 import type { LoadedSetting } from './rhinoSetting';
 import {
   layoutHalo,
@@ -28,7 +29,10 @@ import {
   makeBand,
   makeBezel,
   makeGalleryRail,
+  makePost,
   makeProng,
+  meshVolume,
+  outlineAt,
   type BandParams,
   type HeadParams,
   type MeleeLayout,
@@ -42,6 +46,12 @@ export class RingAssembly {
   centerStone: Mesh | null = null;
   centerGem: GemBuild | null = null;
   centerBVH: MeshBVH | null = null;
+  /** Metal volume of the engagement ring (mm³), for weight; null until built. */
+  metalVolumeMm3: number | null = null;
+  /** Bezel wall thickness when the bezel setting is active. */
+  bezelWallMm: number | null = null;
+  /** Pavé stone diameter when the band has pavé. */
+  paveMeleeMm: number | null = null;
   private gemKey = '';
   private meleeCache = new Map<number, { gem: GemBuild; bvh: MeshBVH }>();
   private materials: DiamondMaterial[] = [];
@@ -78,11 +88,13 @@ export class RingAssembly {
 
     if (rhino) {
       // Rhino setting: metal from the GLB, stone at the SEAT
+      this.metalVolumeMm3 = 0;
       for (const m of rhino.metalMeshes) {
         const clone = new Mesh(m.geometry, this.metalMaterial);
         clone.applyMatrix4(m.matrixWorld);
         clone.name = m.name;
         this.group.add(clone);
+        this.metalVolumeMm3 += meshVolume(m.geometry) * Math.abs(m.matrixWorld.determinant());
       }
       for (const g of rhino.gemMeshes) this.group.add(this.makeFixedGem(g, cfg));
       const seat = rhino.seats[0];
@@ -100,29 +112,39 @@ export class RingAssembly {
       gem,
       gemY,
       bandTopY,
-      prongRadius: Math.max(0.34, 0.065 * gem.metrics.widthMm),
+      bandWidth: band.width,
+      prongRadius: prongDiameter(cfg, gem) / 2,
     };
+    this.bezelWallMm = null;
+    this.paveMeleeMm = null;
 
     const info = CUTS[cfg.cut];
     switch (cfg.setting) {
       case 'solitaire-4':
       case 'solitaire-6': {
         const ts = cfg.setting === 'solitaire-4' ? info.prongs4 : info.prongs6;
-        for (const t of ts) metalParts.push(...makeProng(head, t));
+        for (const t of ts) metalParts.push(makeProng(head, t, cfg.prongPreview, CAST_LEAN_DEG));
         metalParts.push(makeGalleryRail(head));
         break;
       }
       case 'bezel': {
-        metalParts.push(makeBezel(head, Math.max(0.55, 0.08 * gem.metrics.widthMm)));
-        for (const t of info.prongs4) metalParts.push(...makeProng({ ...head, prongRadius: head.prongRadius * 0.8 }, t, false));
+        const wall = Math.max(0.55, 0.08 * gem.metrics.widthMm);
+        this.bezelWallMm = wall;
+        const cup = makeBezel(head, wall);
+        metalParts.push(cup.geometry);
+        // posts end just inside the cup's underside
+        for (const t of info.prongs4) {
+          const R = Math.hypot(...outlineAt(gem, t));
+          metalParts.push(makePost(head, t, R + cup.footOffset - head.prongRadius * 0.3, cup.footY + head.prongRadius * 0.6));
+        }
         break;
       }
       case 'halo': {
-        for (const t of info.prongs4) metalParts.push(...makeProng(head, t));
+        for (const t of info.prongs4) metalParts.push(makeProng(head, t, cfg.prongPreview, CAST_LEAN_DEG));
         metalParts.push(makeGalleryRail(head));
         meleeDiameter = Math.min(1.6, Math.max(0.9, gem.metrics.widthMm * 0.17));
         const mg = this.ensureMelee(meleeDiameter);
-        const halo = layoutHalo(head, meleeDiameter, mg.gem);
+        const halo = layoutHalo(head, meleeDiameter, mg.gem, info.prongs4);
         melee.push(halo);
         metalParts.push(...halo.metal);
         break;
@@ -131,6 +153,7 @@ export class RingAssembly {
 
     if (cfg.pave) {
       const dm = Math.min(cfg.bandWidth * 0.55, 1.5);
+      this.paveMeleeMm = dm;
       const mg = this.ensureMelee(dm);
       const ro = bandTopY;
       const clear = Math.asin(Math.min(0.95, (gem.metrics.widthMm / 2 + 0.8) / ro)) * (180 / Math.PI);
@@ -140,6 +163,8 @@ export class RingAssembly {
     }
     for (const m of melee) this.addMelee(m.stones, meleeDiameter, cfg, 'halo');
 
+    // volume before merging (each part is closed); overlaps where parts fuse add a little
+    this.metalVolumeMm3 = metalParts.reduce((v, g) => v + meshVolume(g), 0);
     const metal = new Mesh(mergeGeometries(metalParts.map(nonIndexed), false)!, this.metalMaterial);
     metal.name = 'metal';
     metalParts.forEach((g) => g.dispose());

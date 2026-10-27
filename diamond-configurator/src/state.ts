@@ -30,6 +30,10 @@ export interface RingConfig {
   /** id from public/models/manifest.json — overrides `setting` when set. */
   rhinoSetting: string | null;
   settingHeight: 'low' | 'medium' | 'high';
+  /** Prong diameter in mm; null = recommended for the metal and stone (see ring/metallurgy.ts). */
+  prongDiameter: number | null;
+  /** Show prong tips bent over the crown, or as cast before the setter folds them. */
+  prongPreview: 'set' | 'cast';
   pave: boolean;
   metal: MetalId;
   finish: 'polished' | 'satin';
@@ -67,6 +71,8 @@ export const DEFAULT_CONFIG: RingConfig = {
   setting: 'solitaire-6',
   rhinoSetting: null,
   settingHeight: 'medium',
+  prongDiameter: null,
+  prongPreview: 'set',
   pave: false,
   metal: 'platinum',
   finish: 'polished',

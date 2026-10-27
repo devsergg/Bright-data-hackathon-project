@@ -3,8 +3,10 @@ import { Box3, Vector3 } from 'three';
 import { exportGemOBJ, exportGemSTL, exportRingGLB, exportSpecJSON } from './export/exporters';
 import { analyzeLight, GemTracer } from './gems/lightPerformance';
 import type { DiamondQuality } from './render/diamondMaterial';
-import { Viewer, type ViewPreset } from './render/viewer';
+import { VIEW_PRESETS, Viewer, type ViewPreset } from './render/viewer';
+import { METAL_ORDER } from './render/metals';
 import { RingAssembly } from './ring/assembly';
+import { benchCheck, compareMetals, type BenchReport } from './ring/metallurgy';
 import { loadManifest, loadSetting, type LoadedSetting, type SettingManifestEntry } from './ring/rhinoSetting';
 import { COLLECTION, designConfig } from './showcase/collections';
 import {
@@ -89,6 +91,7 @@ function boot(): void {
   const rhinoCache = new Map<string, LoadedSetting>();
   let rhino: LoadedSetting | null = null;
   let framed = false;
+  let lastBench: BenchReport | null = null;
 
   const notify = (msg: string) => {
     toast.textContent = msg;
@@ -138,7 +141,7 @@ function boot(): void {
       const gem = assembly.centerGem!;
       if (kind === 'obj') exportGemOBJ(gem);
       if (kind === 'stl') exportGemSTL(gem);
-      if (kind === 'json') exportSpecJSON(store.get(), gem);
+      if (kind === 'json') exportSpecJSON(store.get(), gem, lastBench);
       if (kind === 'glb') void exportRingGLB(assembly.group, `ring-${store.get().cut}`);
     },
   });
@@ -187,6 +190,16 @@ function boot(): void {
     applyCheap(c);
     const gem = assembly.centerGem!;
     builder.showMetrics(gem.metrics);
+    // prong / band checks describe the procedural head; a Rhino head is checked in Rhino
+    const bench = rhino
+      ? null
+      : benchCheck(c, gem, {
+          metalVolumeMm3: assembly.metalVolumeMm3,
+          bezelWallMm: assembly.bezelWallMm ?? undefined,
+          meleeMm: assembly.paveMeleeMm ?? undefined,
+        });
+    lastBench = bench;
+    builder.showBench(bench, compareMetals(gem, assembly.metalVolumeMm3, METAL_ORDER));
     if (rhino) {
       // does the chosen stone fit the head the jeweller modelled?
       const nominal = rhino.seatWidthsMm[0] || rhino.entry.nominalStoneMm;
@@ -199,8 +212,13 @@ function boot(): void {
     const ro = usRingSizeToInnerDiameter(c.ringSize) / 2 + c.bandThickness;
     viewer.setShadow(-ro - 0.05, ro * 3.2);
     if (!framed) {
-      const b = sceneBounds();
-      viewer.setView('hero', b.center, b.radius);
+      // ?view=top|side|front|hand opens on that preset (handy for share links and captures)
+      const v = params.get('view') as ViewPreset | null;
+      if (v && VIEW_PRESETS.includes(v)) setView(v);
+      else {
+        const b = sceneBounds();
+        viewer.setView('hero', b.center, b.radius);
+      }
       framed = true;
     }
     scheduleLight();
@@ -234,13 +252,11 @@ function boot(): void {
 
   syncBackdrop();
   rebuild(cfg);
-  if (capture) {
-    // signal the thumbnail script once a few frames have rendered
-    let frames = 0;
-    viewer.addFrameCallback(() => {
-      if (++frames === 12) document.body.dataset.ready = '1';
-    });
-  }
+  // signal capture scripts once a few frames have rendered
+  let frames = 0;
+  viewer.addFrameCallback(() => {
+    if (++frames === 12) document.body.dataset.ready = '1';
+  });
 
   void loadManifest().then((m) => {
     manifest.push(...m);

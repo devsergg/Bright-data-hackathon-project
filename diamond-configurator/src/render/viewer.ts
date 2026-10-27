@@ -30,7 +30,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { bakeEnvironment, ENVIRONMENTS, type BakedEnvironment, type EnvironmentId } from './environments';
 
-export type ViewPreset = 'hero' | 'top' | 'side' | 'front' | 'hand';
+export const VIEW_PRESETS = ['hero', 'top', 'side', 'front', 'hand'] as const;
+export type ViewPreset = (typeof VIEW_PRESETS)[number];
 
 export class Viewer {
   readonly renderer: WebGLRenderer;

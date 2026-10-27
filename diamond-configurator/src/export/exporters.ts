@@ -14,6 +14,7 @@ import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import type { GemBuild } from '../gems/types';
 import { DiamondMaterial } from '../render/diamondMaterial';
+import type { BenchReport } from '../ring/metallurgy';
 import type { RingConfig } from '../state';
 import { DIAMOND_IOR_D, usRingSizeToInnerDiameter } from '../units';
 
@@ -63,7 +64,7 @@ export async function exportRingGLB(ring: Object3D, name = 'ring'): Promise<void
   download(glb, `${name}.glb`, 'model/gltf-binary');
 }
 
-export function exportSpecJSON(cfg: RingConfig, gem: GemBuild): void {
+export function exportSpecJSON(cfg: RingConfig, gem: GemBuild, bench: BenchReport | null = null): void {
   const spec = {
     generatedAt: new Date().toISOString(),
     units: 'mm',
@@ -79,6 +80,16 @@ export function exportSpecJSON(cfg: RingConfig, gem: GemBuild): void {
       innerDiameterMm: usRingSizeToInnerDiameter(cfg.ringSize),
       widthMm: cfg.bandWidth,
       thicknessMm: cfg.bandThickness,
+    },
+    // resolved prong size and the rule-of-thumb checks it was designed against
+    bench: bench && {
+      metal: bench.metal,
+      prongDiameterMm: +bench.prongDiameterMm.toFixed(2),
+      minProngMm: +bench.minProngMm.toFixed(2),
+      tipBendDeg: +bench.bend.requiredDeg.toFixed(1),
+      springBackDeg: +bench.bend.springBackDeg.toFixed(2),
+      estimatedWeightG: bench.weightG && +bench.weightG.toFixed(2),
+      checks: bench.checks.map(({ id, status, value }) => ({ id, status, value })),
     },
   };
   download(JSON.stringify(spec, null, 2), `ring-spec-${cfg.cut}-${cfg.carat}ct.json`, 'application/json');

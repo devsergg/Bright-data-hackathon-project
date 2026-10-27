@@ -11,6 +11,7 @@ import { COLOR_GRADES, type ColorGrade } from '../gems/color';
 import type { LightReport } from '../gems/lightPerformance';
 import type { BrilliantProportions, CutId, GemMetrics, StepProportions } from '../gems/types';
 import { METALS, METAL_ORDER, type MetalId } from '../render/metals';
+import type { BenchReport, MetalComparison } from '../ring/metallurgy';
 import type { SettingManifestEntry } from '../ring/rhinoSetting';
 import { CUT_GRADES, detectGrade, gradeProportions, type CutGrade } from '../showcase/cutGrades';
 import { withCut, type ClarityGrade, type RingConfig, type Store } from '../state';
@@ -108,6 +109,11 @@ export class Builder {
   private metricsEls: HTMLElement[] = [];
   private lightEls: { canvas: HTMLCanvasElement; bars: HTMLElement }[] = [];
   private reviewSheet!: HTMLElement;
+  private benchEls: HTMLElement[] = [];
+  private metalTable!: HTMLElement;
+  private bench: BenchReport | null = null;
+  private comparison: MetalComparison[] = [];
+  private prongSyncs: Sync[] = [];
   private backBtn!: HTMLButtonElement;
   private nextBtn!: HTMLButtonElement;
   private manifest: SettingManifestEntry[] = [];
@@ -168,6 +174,49 @@ export class Builder {
         meter('Leakage', r.leakage, 'Light escaping out the bottom', undefined, true);
     }
     this.renderReview();
+  }
+
+  /** Manufacturability for the current design, plus how each metal would fare. */
+  showBench(r: BenchReport | null, comparison: MetalComparison[]): void {
+    this.bench = r;
+    this.comparison = comparison;
+    for (const box of this.benchEls) renderBench(box, r);
+    this.renderMetalTable();
+    const c = this.store.get();
+    for (const s of this.prongSyncs) s(c);
+    this.renderReview();
+  }
+
+  private renderMetalTable(): void {
+    if (!this.metalTable) return;
+    const cur = this.store.get().metal;
+    const rows = this.comparison;
+    if (!rows.length) {
+      this.metalTable.innerHTML = '';
+      return;
+    }
+    const need = rows[0].requiredBendDeg;
+    this.metalTable.innerHTML = `
+      <table>
+        <caption>How each metal handles this ring</caption>
+        <thead><tr><th scope="col">Metal</th><th scope="col" title="Vickers hardness: resistance to scratches and dents">Hardness</th><th scope="col" title="Largest safe single fold of a prong tip; this stone needs ${need.toFixed(0)}°">Tip bend</th><th scope="col" title="Thinnest prong that holds this stone">Min prong</th><th scope="col">Weight</th></tr></thead>
+        <tbody>${rows
+          .map((r) => {
+            const tight = need / r.maxBendDeg;
+            const cls = tight <= 0.8 ? 'ok' : tight <= 1.1 ? 'caution' : 'risk';
+            return `<tr class="${r.metal === cur ? 'current' : ''}"><th scope="row">${METALS[r.metal].label.replace(/ \(.*\)/, '')}</th><td>${r.hv} HV</td><td><i class="dot ${cls}" aria-hidden="true"></i>${r.maxBendDeg.toFixed(0)}°</td><td>${r.minProngMm.toFixed(2)} mm</td><td>${r.weightG ? `${r.weightG.toFixed(1)} g` : '…'}</td></tr>`;
+          })
+          .join('')}</tbody>
+      </table>
+      <p class="hint">This stone needs a ${need.toFixed(0)}° fold at each prong tip. Harder alloys resist scratches but tolerate less bending; softer ones need thicker prongs. Typical alloy values: confirm with your caster.</p>`;
+  }
+
+  private benchCard(): HTMLElement {
+    const box = el('div', 'bench-card');
+    box.setAttribute('aria-live', 'polite');
+    this.benchEls.push(box);
+    renderBench(box, this.bench);
+    return box;
   }
 
   // ------------------------------------------------------------------ build
@@ -366,8 +415,46 @@ export class Builder {
     height.append(seg, hint('Low sits snug against gloves and sleeves. High lifts the stone so more light enters from the side.'));
 
     const pave = this.toggle('pave', 'Diamonds along the band', (c) => c.pave, (v) => ({ pave: v }));
-    s.append(this.settingGrid, height, pave);
+    s.append(this.settingGrid, height, this.prongField(), pave, this.benchCard());
     return s;
+  }
+
+  /** Prong thickness (auto = recommended for the metal and stone) and the as-cast preview. */
+  private prongField(): HTMLElement {
+    const box = el('div', 'field');
+    box.innerHTML = `<div class="field-head"><label class="label" for="prong-d">Prong thickness</label><output for="prong-d" class="mono"></output></div>`;
+    const out = box.querySelector('output')!;
+    const r = input('range', 'prong-d');
+    r.min = '0.5';
+    r.max = '1.6';
+    r.step = '0.05';
+    r.oninput = () => this.store.set({ prongDiameter: parseFloat(r.value) });
+    const row = el('div', 'chips');
+    const auto = button('Recommended', 'chip', () => this.store.set({ prongDiameter: null }));
+    const cast = button('Show before setting', 'chip', () =>
+      this.store.set({ prongPreview: this.store.get().prongPreview === 'cast' ? 'set' : 'cast' }),
+    );
+    cast.setAttribute('aria-pressed', 'false');
+    row.append(auto, cast);
+    const note = hint('');
+    box.append(r, row, note);
+    const sync: Sync = (c) => {
+      box.hidden = c.setting === 'bezel' || !!c.rhinoSetting;
+      const b = this.bench;
+      if (!b) return;
+      if (document.activeElement !== r) r.value = String(b.prongDiameterMm);
+      out.textContent = `${b.prongDiameterMm.toFixed(2)} mm · min ${b.minProngMm.toFixed(2)}`;
+      auto.classList.toggle('selected', c.prongDiameter === null);
+      cast.classList.toggle('selected', c.prongPreview === 'cast');
+      cast.setAttribute('aria-pressed', String(c.prongPreview === 'cast'));
+      note.textContent =
+        c.prongPreview === 'cast'
+          ? `As cast: tips stand straight so the stone drops in. The setter then folds each one ${b.bend.requiredDeg.toFixed(0)}° onto the crown.`
+          : `Recommended is 10% over the minimum for ${METALS[c.metal].label.replace(/ \(.*\)/, '')} at this stone size. Softer metals need thicker prongs.`;
+    };
+    this.syncs.push(sync);
+    this.prongSyncs.push(sync);
+    return box;
   }
 
   private renderSettingCards(): void {
@@ -430,7 +517,9 @@ export class Builder {
       seg.append(b);
     }
     finish.append(seg);
-    s.append(grid, finish);
+    this.metalTable = el('div', 'metal-table');
+    this.syncs.push(() => this.renderMetalTable());
+    s.append(grid, finish, this.metalTable, this.benchCard());
     return s;
   }
 
@@ -479,7 +568,7 @@ export class Builder {
     });
     engr.append(t, preview);
 
-    s.append(size, sizeHint, width, thick, wb, engr);
+    s.append(size, sizeHint, width, thick, this.benchCard(), wb, engr);
     return s;
   }
 
@@ -505,7 +594,7 @@ export class Builder {
       button('Spec .JSON', 'chip', () => this.hooks.onExport('json')),
     );
     pro.append(row, hint('Exact facet geometry for Rhino (see rhino/import_gem.py).'));
-    s.append(this.reviewSheet, light, actions, pro);
+    s.append(this.reviewSheet, this.benchCard(), light, actions, pro);
     return s;
   }
 
@@ -530,7 +619,10 @@ export class Builder {
       ['Depth · Table', m ? `${m.depthPct.toFixed(1)}% · ${m.tablePct.toFixed(0)}%` : '…', null],
       ['Facets', m ? `${m.facetCount}` : '…', null],
       ['Setting', `${settingName}${c.pave ? ' · pavé band' : ''} · ${c.settingHeight} height`, 'setting'],
-      ['Metal', `${METALS[c.metal].label} · ${c.finish === 'satin' ? 'satin' : 'high polish'}`, 'metal'],
+      ...(this.bench && c.setting !== 'bezel' && !c.rhinoSetting
+        ? ([['Prongs', `${this.bench.prongDiameterMm.toFixed(2)} mm (min ${this.bench.minProngMm.toFixed(2)})`, 'setting']] as [string, string, StepId][])
+        : []),
+      ['Metal', `${METALS[c.metal].label} · ${c.finish === 'satin' ? 'satin' : 'high polish'}${this.bench?.weightG ? ` · ≈${this.bench.weightG.toFixed(1)} g` : ''}`, 'metal'],
       ['Size', `US ${c.ringSize} · ${usRingSizeToInnerDiameter(c.ringSize).toFixed(1)} mm`, 'band'],
       ['Band', `${c.bandWidth.toFixed(1)} × ${c.bandThickness.toFixed(2)} mm${c.weddingBand !== 'none' ? ` · ${c.weddingBand} wedding band` : ''}`, 'band'],
       ['Engraving', c.engraving ? `“${escapeHtml(c.engraving)}”` : 'None', 'band'],
@@ -668,6 +760,26 @@ function tintCss(g: ColorGrade): string {
   const path = g === 'black' ? 1 : 9; // mm of travel through the stone
   const rgb = a.map((k) => Math.round(255 * Math.pow(Math.exp(-k * path), 1 / 2.2)));
   return `rgb(${rgb.join(',')})`;
+}
+
+const STATUS_TEXT = { ok: 'Fine', caution: 'Check', risk: 'Risk' } as const;
+
+function renderBench(box: HTMLElement, r: BenchReport | null): void {
+  if (!r) {
+    box.innerHTML = '<p class="muted small">Bench check runs when the ring is built…</p>';
+    return;
+  }
+  const summary =
+    r.worst === 'ok' ? 'Ready to cast and set' : r.worst === 'caution' ? 'Workable, with care at the bench' : 'Needs changes before casting';
+  box.innerHTML = `
+    <div class="bench-head"><span class="label">Bench check</span><span class="bench-sum ${r.worst}"><i class="dot ${r.worst}" aria-hidden="true"></i>${summary}</span></div>
+    <ul>${r.checks
+      .map(
+        (c) =>
+          `<li class="${c.status}"><i class="dot ${c.status}" aria-hidden="true"></i><span class="b-label">${c.label}<span class="sr-only"> (${STATUS_TEXT[c.status]})</span></span><span class="b-val mono">${c.value}</span><span class="b-detail">${c.detail}</span></li>`,
+      )
+      .join('')}</ul>
+    <p class="hint">Rule-of-thumb mechanics from typical alloy properties, not a substitute for your setter's judgement.</p>`;
 }
 
 function meter(name: string, v: number, tip: string, text?: string, invert = false): string {

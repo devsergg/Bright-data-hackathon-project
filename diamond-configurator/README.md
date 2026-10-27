@@ -27,7 +27,8 @@ is kept in the URL hash, so every configuration is a shareable link.
 | **Light performance** | `src/gems/lightPerformance.ts` | ASET/DiamCalc-style analysis: brightness, light return, leakage, contrast, fire, plus an ASET-colour map. Updates live as proportions change. Click the stone to draw an actual light path. |
 | **Lighting** | `src/render/environments.ts` | Procedural HDR light rooms (studio light tent, boutique spots, daylight, candlelight, office). Sharp cube for gems, PMREM for metal. Drop-in support for `.hdr` files. |
 | **Metals** | `src/render/metals.ts` | Platinum, palladium, 14k/18k yellow, rose, rhodium white gold. Linear F0 colours from measured data. Polished or satin. |
-| **Settings** | `src/ring/parts.ts`, `assembly.ts` | Comfort-fit band from US size, 4/6-prong, bezel, halo, pavé shoulders, matching wedding band (plain, half pavé, eternity). |
+| **Settings** | `src/ring/parts.ts`, `assembly.ts` | Comfort-fit band from US size, 4/6-prong, bezel, halo, pavé shoulders, matching wedding band (plain, half pavé, eternity). Prongs are closed, tapered sweeps that rise out of the band, rest on the pavilion and fold onto the crown (or stand as cast); the bezel is a tapered cup on posts; the halo is strutted to the prongs. |
+| **Bench check** | `src/ring/metallurgy.ts` | Per-alloy mechanics (hardness, yield, elongation, modulus, density) drive the minimum prong diameter, how far a tip can fold before cracking, spring-back, setting force, band stiffness, bezel burnishing and metal weight. Rule-of-thumb model; calibrate `MECH` to your caster's datasheets. |
 | **Rhino GLBs** | `src/ring/rhinoSetting.ts`, `rhino/`, `public/models/` | Naming contract (`METAL_*`, `GEM_*`, `SEAT_center_<mm>`), metre→mm auto-detect, orientation-proof seat markers, stone-fit warnings. A sample GLB is included. |
 | **Exports** | `src/export/exporters.ts` | Stone OBJ/STL (exact facets, mm) for Rhino, ring GLB, order spec JSON, PNG snapshot, share link. |
 

@@ -1,5 +1,17 @@
 /**
- * Viewer: renderer, camera, orbit controls, post-processing and lighting.
+ * Viewer: threepipe + webgi realistic-rendering pipeline.
+ *
+ *   ProgressivePlugin + SSAAPlugin  jittered frames accumulate while the view is still
+ *                                   (clean edges on facets and prong tips)
+ *   GBufferPlugin                   depth / normals for the screen-space passes
+ *   SSAOPlugin                      contact darkening where prongs meet band and stone
+ *   SSReflectionPlugin              metal reflects the stone and the other prongs
+ *   TemporalAAPlugin                stable edges while orbiting
+ *   BloomPlugin                     only the hottest glints bloom (sparkle, not glow)
+ *   ContactShadowGroundPlugin       real shadow of the band and head on the backdrop
+ *
+ * Rendering is on demand: threepipe redraws only after {@link Viewer.invalidate}
+ * (or camera / scene events), then refines for `maxFrameCount` frames.
  */
 import {
   ACESFilmicToneMapping,
@@ -7,96 +19,132 @@ import {
   CanvasTexture,
   CapsuleGeometry,
   Color,
-  MeshPhysicalMaterial,
+  ContactShadowGroundPlugin,
+  GBufferPlugin,
   Line,
   LineBasicMaterial,
   Mesh,
-  MeshBasicMaterial,
   NeutralToneMapping,
-  PerspectiveCamera,
-  PlaneGeometry,
+  type Object3D,
+  OrbitControls3,
+  PerspectiveCamera2,
+  PhysicalMaterial,
+  ProgressivePlugin,
   Raycaster,
-  Scene,
   SRGBColorSpace,
+  SSAAPlugin,
+  SSAOPlugin,
+  ThreeViewer,
+  TonemapPlugin,
   Vector2,
   Vector3,
-  WebGLRenderer,
-  type Object3D,
-} from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+} from 'threepipe';
+import { BloomPlugin, SSReflectionPlugin, TemporalAAPlugin } from '@threepipe/webgi-plugins';
 import { bakeEnvironment, ENVIRONMENTS, type BakedEnvironment, type EnvironmentId } from './environments';
 
 export const VIEW_PRESETS = ['hero', 'top', 'side', 'front', 'hand'] as const;
 export type ViewPreset = (typeof VIEW_PRESETS)[number];
 
 export class Viewer {
-  readonly renderer: WebGLRenderer;
-  readonly scene = new Scene();
-  readonly camera: PerspectiveCamera;
-  readonly controls: OrbitControls;
-  private composer: EffectComposer;
-  private bloom: UnrealBloomPass;
+  readonly three: ThreeViewer;
+  readonly camera: PerspectiveCamera2;
+  readonly controls: OrbitControls3;
   private env: BakedEnvironment | null = null;
   private envCache = new Map<EnvironmentId, BakedEnvironment>();
-  private shadow: Mesh;
+  private ground: ContactShadowGroundPlugin;
+  private bloom: BloomPlugin;
+  private tonemap: TonemapPlugin;
   private pathLine: Line | null = null;
   private tween: { from: Vector3; to: Vector3; t0: number; dur: number } | null = null;
   private readonly container: HTMLElement;
-  private onFrame: (() => void)[] = [];
   private finger: Mesh;
   private backdropOverride: [string, string] | null = null;
   private envId: EnvironmentId | null = null;
-  bloomEnabled = true;
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.toneMapping = NeutralToneMapping;
-    container.appendChild(this.renderer.domElement);
+    this.three = new ThreeViewer({
+      container,
+      msaa: false,
+      // half-float pipeline: the light room's spots are far above RGBM's range,
+      // and the gem's brightest glints must survive to bloom
+      rgbm: false,
+      maxHDRIntensity: 72,
+      renderScale: 'auto',
+      tonemap: true,
+      plugins: [new ProgressivePlugin(48), SSAAPlugin],
+    });
+    this.three.renderManager.webglRenderer.domElement.style.touchAction = 'none';
+    this.three.addPluginsSync([GBufferPlugin, SSAOPlugin, TemporalAAPlugin, BloomPlugin, SSReflectionPlugin, ContactShadowGroundPlugin]);
 
-    this.camera = new PerspectiveCamera(30, 1, 0.5, 2000);
-    this.camera.position.set(38, 30, 52);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.tonemap = this.three.getPlugin(TonemapPlugin)!;
+    this.tonemap.toneMapping = NeutralToneMapping;
+
+    // only the brightest glints bloom
+    this.bloom = this.three.getPlugin(BloomPlugin)!;
+    this.bloom.pass!.threshold = 2.6;
+    this.bloom.pass!.intensity = 0.18;
+    this.bloom.pass!.radius = 0.5;
+
+    const ssr = this.three.getPlugin(SSReflectionPlugin)!;
+    ssr.pass!.intensity = 1;
+
+    const ssao = this.three.getPlugin(SSAOPlugin)!;
+    ssao.pass!.intensity = 0.6;
+
+    // shadow catcher: transparent ground, opaque only where the ring occludes it
+    this.ground = this.three.getPlugin(ContactShadowGroundPlugin)!;
+    this.ground.autoAdjustTransform = false;
+    this.ground.shadowHeight = 14;
+    this.ground.blurAmount = 2.2;
+    this.ground.mapMode = 'alphaMap';
+    this.ground.material!.color!.set(0x000000);
+    this.ground.material!.opacity = 0.5;
+    this.ground.refresh();
+
+    const cam = this.three.scene.mainCamera as PerspectiveCamera2;
+    this.camera = cam;
+    cam.fov = 30;
+    cam.userData.minNearPlane = 0.5;
+    cam.userData.maxFarPlane = 2000;
+    cam.position.set(38, 30, 52);
+    cam.target.set(0, 10, 0);
+    cam.setDirty();
+    this.controls = cam.controls as OrbitControls3;
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 14;
     this.controls.maxDistance = 220;
     this.controls.autoRotateSpeed = 0.9;
-    this.controls.target.set(0, 10, 0);
-
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    // only the brightest glints bloom — subtle "sparkle", not a glow
-    this.bloom = new UnrealBloomPass(new Vector2(1, 1), 0.18, 0.1, 2.2);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
-
-    this.shadow = makeContactShadow();
-    this.scene.add(this.shadow);
 
     this.finger = makeFinger();
     this.finger.visible = false;
-    this.scene.add(this.finger);
+    this.three.scene.addObject(this.finger, { addToRoot: true });
 
-    new ResizeObserver(() => this.resize()).observe(container);
-    this.resize();
-    this.renderer.setAnimationLoop(() => this.frame());
+    this.three.addEventListener('preFrame', () => this.frame());
+  }
+
+  /** Add the ring (or anything else) to the scene. */
+  add(obj: Object3D): void {
+    this.three.scene.addObject(obj, { autoCenter: false, autoScale: false });
+  }
+
+  /** Ask for a fresh render (and a new progressive refinement). */
+  invalidate(): void {
+    this.three.setDirty();
   }
 
   setEnvironment(id: EnvironmentId): BakedEnvironment {
     let env = this.envCache.get(id);
     if (!env) {
-      env = bakeEnvironment(this.renderer, ENVIRONMENTS[id]);
+      env = bakeEnvironment(this.three.renderManager.webglRenderer, ENVIRONMENTS[id]);
       this.envCache.set(id, env);
     }
-    this.env = env;
-    this.scene.environment = env.pmrem;
+    if (this.env !== env) {
+      this.env = env;
+      this.three.scene.autoDisposeSceneMaps = false;
+      this.three.scene.environment = env.metal as never;
+    }
     if (this.envId !== id) {
       this.envId = id;
       this.applyBackdrop();
@@ -117,9 +165,13 @@ export class Viewer {
     if (!this.envId) return;
     const own = ENVIRONMENTS[this.envId].background;
     const [inner, outer] = this.envId === 'studio' && this.backdropOverride ? this.backdropOverride : own;
-    if (this.scene.background instanceof CanvasTexture) this.scene.background.dispose();
-    this.scene.background = makeBackdrop(inner, outer);
+    const scene = this.three.scene;
+    const old = scene.background;
+    scene.backgroundColor = new Color(0xffffff); // multiplies the backdrop texture
+    scene.background = makeBackdrop(inner, outer) as never;
+    if (old instanceof CanvasTexture) old.dispose();
     this.container.style.background = outer;
+    this.invalidate();
   }
 
   /** Try-on finger running through the band (finger axis = Z, fingertip toward +Z). */
@@ -131,13 +183,14 @@ export class Viewer {
       this.finger.geometry = fingerGeometry(r);
       this.finger.userData.r = r;
     }
-    (this.finger.material as MeshPhysicalMaterial).color.set(new Color(skin));
-    this.shadow.visible = !visible;
+    (this.finger.material as PhysicalMaterial).color.set(new Color(skin));
+    this.ground.visible = !visible;
+    this.invalidate();
   }
 
-  /** Rotate the PMREM used by metals together with the gem environment. */
+  /** Rotate the environment used by metals together with the gem environment. */
   setEnvironmentRotation(deg: number): void {
-    this.scene.environmentRotation.set(0, (deg * Math.PI) / 180, 0);
+    this.three.scene.environmentRotation.set(0, (deg * Math.PI) / 180, 0);
   }
 
   get environment(): BakedEnvironment {
@@ -145,20 +198,44 @@ export class Viewer {
   }
 
   setExposure(e: number, preset: EnvironmentId): void {
-    this.renderer.toneMappingExposure = e * ENVIRONMENTS[preset].exposure;
+    this.tonemap.exposure = e * ENVIRONMENTS[preset].exposure;
   }
 
   setToneMapping(mode: 'neutral' | 'aces'): void {
-    this.renderer.toneMapping = mode === 'aces' ? ACESFilmicToneMapping : NeutralToneMapping;
+    this.tonemap.toneMapping = mode === 'aces' ? ACESFilmicToneMapping : NeutralToneMapping;
   }
 
+  set bloomEnabled(on: boolean) {
+    if (this.bloom.enabled !== on) this.bloom.enabled = on;
+  }
+
+  set renderScale(s: number) {
+    const rm = this.three.renderManager;
+    if (Math.abs(rm.renderScale - s) > 1e-3) rm.renderScale = s;
+  }
+
+  /** Screen-space reflections and ambient occlusion on/off (the costly passes). */
+  setEffects(on: boolean): void {
+    for (const p of [this.three.getPlugin(SSReflectionPlugin), this.three.getPlugin(SSAOPlugin)]) {
+      if (p && p.enabled !== on) p.enabled = on;
+    }
+  }
+
+  /** Ground (shadow catcher) height and size, mm. */
   setShadow(y: number, size: number): void {
-    this.shadow.position.y = y;
-    this.shadow.scale.setScalar(size);
+    this.ground.yOffset = -y;
+    this.ground.size = size;
+    const mesh = (this.ground as unknown as { _mesh?: Mesh })._mesh;
+    if (mesh) {
+      mesh.position.set(0, y, 0);
+      mesh.scale.setScalar(size);
+    }
+    this.ground.refresh();
+    this.invalidate();
   }
 
   addFrameCallback(cb: () => void): void {
-    this.onFrame.push(cb);
+    this.three.addEventListener('preFrame', cb);
   }
 
   /** Smoothly move the camera to a preset viewpoint around `target`. */
@@ -174,7 +251,7 @@ export class Viewer {
       front: new Vector3(0, 0.08, 1),
       hand: new Vector3(0.18, 0.74, -0.62), // from the wrist, fingertip pointing away
     };
-    this.controls.target.copy(target);
+    this.camera.target.copy(target);
     this.tween = {
       from: this.camera.position.clone(),
       to: target.clone().addScaledVector(dirs[view].normalize(), d),
@@ -185,7 +262,7 @@ export class Viewer {
 
   /** Ray from a pointer event, for picking. */
   pick(ev: PointerEvent | MouseEvent, objects: Object3D[]) {
-    const r = this.renderer.domElement.getBoundingClientRect();
+    const r = this.three.canvas.getBoundingClientRect();
     const ndc = new Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     const rc = new Raycaster();
     rc.setFromCamera(ndc, this.camera);
@@ -195,47 +272,32 @@ export class Viewer {
   /** Draw a light path (world-space points); null clears it. */
   showPath(points: Vector3[] | null): void {
     if (this.pathLine) {
-      this.scene.remove(this.pathLine);
+      this.pathLine.removeFromParent();
       this.pathLine.geometry.dispose();
       this.pathLine = null;
     }
-    if (!points || points.length < 2) return;
-    const g = new BufferGeometry().setFromPoints(points);
-    this.pathLine = new Line(g, new LineBasicMaterial({ color: 0xff3d6e, depthTest: false, transparent: true }));
-    this.pathLine.renderOrder = 999;
-    this.scene.add(this.pathLine);
+    if (points && points.length >= 2) {
+      const g = new BufferGeometry().setFromPoints(points);
+      this.pathLine = new Line(g, new LineBasicMaterial({ color: 0xff3d6e, depthTest: false, transparent: true }));
+      this.pathLine.renderOrder = 999;
+      this.pathLine.userData.bboxVisible = false;
+      this.three.scene.addObject(this.pathLine, { addToRoot: true });
+    }
+    this.invalidate();
   }
 
+  /** PNG of the fully refined frame. */
   snapshot(): string {
-    this.render();
-    return this.renderer.domElement.toDataURL('image/png');
-  }
-
-  private resize(): void {
-    const w = this.container.clientWidth;
-    const h = this.container.clientHeight;
-    this.renderer.setSize(w, h);
-    this.composer.setSize(w, h);
-    this.bloom.resolution.set(w, h);
-    this.camera.aspect = w / Math.max(1, h);
-    this.camera.updateProjectionMatrix();
+    return this.three.canvas.toDataURL('image/png');
   }
 
   private frame(): void {
-    if (this.tween) {
-      const t = Math.min(1, (performance.now() - this.tween.t0) / this.tween.dur);
-      const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-      this.camera.position.lerpVectors(this.tween.from, this.tween.to, e);
-      if (t >= 1) this.tween = null;
-    }
-    this.controls.update();
-    for (const cb of this.onFrame) cb();
-    this.render();
-  }
-
-  private render(): void {
-    if (this.bloomEnabled) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    if (!this.tween) return;
+    const t = Math.min(1, (performance.now() - this.tween.t0) / this.tween.dur);
+    const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    this.camera.position.lerpVectors(this.tween.from, this.tween.to, e);
+    this.camera.setDirty();
+    if (t >= 1) this.tween = null;
   }
 }
 
@@ -263,7 +325,7 @@ function fingerGeometry(r: number): CapsuleGeometry {
 
 function makeFinger(): Mesh {
   const g = fingerGeometry(8);
-  const mat = new MeshPhysicalMaterial({
+  const mat = new PhysicalMaterial({
     color: 0xe0ac85,
     roughness: 0.72,
     sheen: 0.25,
@@ -272,30 +334,10 @@ function makeFinger(): Mesh {
     clearcoat: 0.05,
     clearcoatRoughness: 0.7,
   });
+  mat.userData.ssreflDisabled = true;
   const m = new Mesh(g, mat);
   m.position.z = -12;
   m.name = 'finger';
-  return m;
-}
-
-/** Soft radial contact shadow under the ring. */
-function makeContactShadow(): Mesh {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, 'rgba(0,0,0,0.38)');
-  g.addColorStop(0.45, 'rgba(0,0,0,0.16)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  const tex = new CanvasTexture(c);
-  tex.colorSpace = SRGBColorSpace;
-  const m = new Mesh(
-    new PlaneGeometry(1, 1),
-    new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }),
-  );
-  m.rotation.x = -Math.PI / 2;
-  m.renderOrder = -1;
+  m.userData.bboxVisible = false;
   return m;
 }

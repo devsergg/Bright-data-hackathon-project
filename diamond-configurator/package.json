@@ -11,11 +11,13 @@
     "showcase": "node tools/render-showcase.cjs"
   },
   "dependencies": {
-    "three": "^0.186.1",
-    "three-mesh-bvh": "^0.9.16"
+    "@threepipe/webgi-plugins": "^0.7.0",
+    "three": "npm:three-modded@^0.168.10008",
+    "three-mesh-bvh": "^0.9.16",
+    "threepipe": "^0.6.0"
   },
   "devDependencies": {
-    "@types/three": "^0.186.0",
+    "@types/three": "npm:three-types-modded@^0.168.10003",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

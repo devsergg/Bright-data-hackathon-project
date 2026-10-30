@@ -25,7 +25,8 @@ is kept in the URL hash, so every configuration is a shareable link.
 | **Carat → size** | `src/gems/build.ts` | Volume integrated from the closed mesh × 3.52 mg/mm³. 1.00 ct ideal round = **6.46 mm** (trade reference 6.4–6.5); 1 ct emerald 1.4:1 = 7.05 × 5.04 mm. A deeper cut correctly looks smaller face-up. |
 | **Diamond shader** | `src/render/diamondMaterial.ts` | GPU BVH ray tracing (three-mesh-bvh) through the real facets, up to 10 internal bounces with Fresnel energy splitting, Sellmeier IOR per R/G/B channel, Beer–Lambert colour (D–K, fancy colours). Same shader drives instanced melee. |
 | **Light performance** | `src/gems/lightPerformance.ts` | ASET/DiamCalc-style analysis: brightness, light return, leakage, contrast, fire, plus an ASET-colour map. Updates live as proportions change. Click the stone to draw an actual light path. |
-| **Lighting** | `src/render/environments.ts` | Procedural HDR light rooms (studio light tent, boutique spots, daylight, candlelight, office). Sharp cube for gems, PMREM for metal. Drop-in support for `.hdr` files. |
+| **Viewer** | `src/render/viewer.ts` | [threepipe](https://threepipe.org) + the free [webgi](https://webgi.dev) plugins (the open half of the iJewel3D stack): progressive super-sampling, temporal AA, screen-space reflections and ambient occlusion, bloom on the hottest glints, a contact-shadow ground. Renders on demand and refines while the view is still. `?quality=low` turns SSR/SSAO off. |
+| **Lighting** | `src/render/environments.ts` | Procedural HDR light rooms (studio light tent, boutique spots, daylight, candlelight, office). The gems see the room as is; polished metal gets a contrast variant (dark dome, strip softboxes) so it reads as metal, not grey plastic. Drop-in support for `.hdr` files. |
 | **Metals** | `src/render/metals.ts` | Platinum, palladium, 14k/18k yellow, rose, rhodium white gold. Linear F0 colours from measured data. Polished or satin. |
 | **Settings** | `src/ring/parts.ts`, `assembly.ts` | Comfort-fit band from US size, 4/6-prong, bezel, halo, pavé shoulders, matching wedding band (plain, half pavé, eternity). Prongs are closed, tapered sweeps that rise out of the band, rest on the pavilion and fold onto the crown (or stand as cast); the bezel is a tapered cup on posts; the halo is strutted to the prongs. |
 | **Bench check** | `src/ring/metallurgy.ts` | Per-alloy mechanics (hardness, yield, elongation, modulus, density) drive the minimum prong diameter, how far a tip can fold before cracking, spring-back, setting force, band stiffness, bezel burnishing and metal weight. Rule-of-thumb model; calibrate `MECH` to your caster's datasheets. |
@@ -46,6 +47,14 @@ is kept in the URL hash, so every configuration is a shareable link.
 4. **Lighting that flatters diamonds.** Brilliance needs broad bright sources, scintillation
    needs contrast, fire needs small hard sources. The studio preset is modelled on a
    jewellery-photography light tent, with black cards and a camera reflection.
+
+## Licensing
+
+The viewer uses `@threepipe/webgi-plugins`, which is **GPL-3.0** (free for personal and
+commercial use, but GPL). Distributing this configurator therefore means offering its source
+under a GPL-compatible licence. threepipe itself is Apache-2.0, and `three` is aliased to
+threepipe's fork `three-modded@0.168`. iJewel3D's paid gem plugins (Diamond, gemstones,
+inclusions) are not used; the diamond shader here is our own.
 
 ## Docs
 

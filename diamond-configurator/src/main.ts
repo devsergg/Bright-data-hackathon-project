@@ -25,10 +25,11 @@ import { photoModal, shareModal } from './ui/modal';
 import { mountStageControls } from './ui/stage';
 import { channelIORs, usRingSizeToInnerDiameter } from './units';
 
-const QUALITY: Record<QualityLevel, DiamondQuality & { dpr: number }> = {
-  high: { bounces: 8, fullDispersion: true, dpr: 2 },
-  medium: { bounces: 6, fullDispersion: false, dpr: 1.5 },
-  low: { bounces: 4, fullDispersion: false, dpr: 1 },
+/** `effects`: screen-space reflections + ambient occlusion (off on low for older phones). */
+const QUALITY: Record<QualityLevel, DiamondQuality & { dpr: number; effects: boolean }> = {
+  high: { bounces: 8, fullDispersion: true, dpr: 2, effects: true },
+  medium: { bounces: 6, fullDispersion: false, dpr: 1.5, effects: true },
+  low: { bounces: 4, fullDispersion: false, dpr: 1, effects: false },
 };
 
 /** Changes that only touch uniforms / renderer state, never the geometry. */
@@ -82,10 +83,11 @@ function boot(): void {
   if (params.has('still') || capture) initial.autoRotate = false;
   const store = new Store(initial);
   const viewer = new Viewer(viewerEl);
+  if (import.meta.env.DEV) Object.assign(window, { __viewer: viewer });
   let cfg = store.get();
   let env = viewer.setEnvironment(cfg.environment);
   const assembly = new RingAssembly(env.cube, QUALITY[cfg.quality]);
-  viewer.scene.add(assembly.group);
+  viewer.add(assembly.group);
 
   const manifest: SettingManifestEntry[] = [];
   const rhinoCache = new Map<string, LoadedSetting>();
@@ -178,10 +180,12 @@ function boot(): void {
     for (const m of assembly.diamondMaterials) m.setDispersion(c.dispersion);
     const q = QUALITY[c.quality];
     assembly.setQuality(q);
-    viewer.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.dpr));
+    viewer.renderScale = Math.min(window.devicePixelRatio, q.dpr);
+    viewer.setEffects(q.effects);
     viewer.bloomEnabled = c.bloom;
     viewer.controls.autoRotate = c.autoRotate;
     viewer.setFinger(c.showFinger, usRingSizeToInnerDiameter(c.ringSize), SKIN_TONES[c.skinTone] ?? SKIN_TONES[1]);
+    viewer.invalidate();
   };
 
   const rebuild = (c: RingConfig) => {

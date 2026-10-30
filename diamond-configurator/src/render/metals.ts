@@ -7,7 +7,7 @@
  * of Shading", SIGGRAPH 2015); alloy values are interpolated approximations —
  * calibrate them against photos of your actual metal samples.
  */
-import { Color, MeshPhysicalMaterial } from 'three';
+import type { MeshPhysicalMaterial } from 'three';
 
 export type MetalId =
   | 'platinum'
@@ -41,18 +41,6 @@ export const METAL_ORDER: MetalId[] = [
   'rose-gold-14k',
   'palladium',
 ];
-
-export function makeMetalMaterial(id: MetalId, finish: 'polished' | 'satin' = 'polished'): MeshPhysicalMaterial {
-  const m = METALS[id];
-  const mat = new MeshPhysicalMaterial({
-    color: new Color().setRGB(...m.color),
-    metalness: 1,
-    roughness: finish === 'satin' ? 0.38 : m.roughness,
-    envMapIntensity: 1,
-  });
-  mat.name = `metal:${id}`;
-  return mat;
-}
 
 export function applyMetal(mat: MeshPhysicalMaterial, id: MetalId, finish: 'polished' | 'satin'): void {
   const m = METALS[id];

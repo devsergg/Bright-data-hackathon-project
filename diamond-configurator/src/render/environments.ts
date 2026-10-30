@@ -22,7 +22,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
-  PMREMGenerator,
   Scene,
   ShaderMaterial,
   SphereGeometry,
@@ -30,7 +29,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
-import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 export type EnvironmentId = 'studio' | 'boutique' | 'daylight' | 'candlelight' | 'office';
 
@@ -51,6 +50,13 @@ export interface EnvironmentPreset {
   description: string;
   dome: { top: string; horizon: string; bottom: string; intensity: number };
   panels: LightPanel[];
+  /**
+   * What polished metal reflects, when it should differ from the gem's room.
+   * A bright, even dome flatters a diamond but turns polished metal into grey
+   * plastic; metal needs a dark room with long strip softboxes so the band shows
+   * crisp light/dark bands (the jewellery-photography look).
+   */
+  metal?: { dome: EnvironmentPreset['dome']; panels: LightPanel[] };
   /** Backdrop the shopper sees behind the ring: radial gradient [centre, edge]. */
   background: [string, string];
   exposure: number;
@@ -90,6 +96,25 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       // small hard sources for fire
       ...spots(8, 42, 1.8, 60, '#ffffff', 22),
     ],
+    metal: {
+      dome: { top: '#9a9a9a', horizon: '#2c2c2c', bottom: '#6a6a6a', intensity: 1 },
+      panels: [
+        // overhead softboxes and a white table bounce
+        { elev: 62, azim: 60, w: 46, h: 38, color: '#ffffff', intensity: 5 },
+        { elev: 62, azim: 180, w: 46, h: 38, color: '#ffffff', intensity: 4 },
+        { elev: 62, azim: 300, w: 46, h: 38, color: '#ffffff', intensity: 4.5 },
+        { elev: -60, azim: 0, w: 120, h: 50, color: '#f2f2f2', intensity: 2.2 },
+        // tall strip lights: the long highlights down the band
+        { elev: 10, azim: 35, w: 7, h: 70, color: '#ffffff', intensity: 6 },
+        { elev: 10, azim: 145, w: 7, h: 70, color: '#ffffff', intensity: 5 },
+        { elev: 10, azim: 215, w: 7, h: 70, color: '#ffffff', intensity: 6 },
+        { elev: 10, azim: 325, w: 7, h: 70, color: '#ffffff', intensity: 5 },
+        // a low horizontal strip for the inside of the shank
+        { elev: -8, azim: 90, w: 80, h: 5, color: '#ffffff', intensity: 4 },
+        { elev: -8, azim: 270, w: 80, h: 5, color: '#ffffff', intensity: 4 },
+        ...spots(8, 42, 1.8, 40, '#ffffff', 22),
+      ],
+    },
     background: ['#fbfaf8', '#d9d8d4'],
     exposure: 1.0,
   },
@@ -103,6 +128,17 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       ...spots(5, 80, 2.5, 90, '#fffaf2', 10),
       { elev: 18, azim: 90, w: 70, h: 6, color: '#ffe9cc', intensity: 1.2 },
     ],
+    metal: {
+      dome: { top: '#4a4038', horizon: '#14110e', bottom: '#2a241e', intensity: 1 },
+      panels: [
+        { elev: 60, azim: 40, w: 36, h: 28, color: '#fff1dc', intensity: 3.5 },
+        { elev: 60, azim: 200, w: 36, h: 28, color: '#fff1dc', intensity: 2.5 },
+        { elev: 12, azim: 120, w: 6, h: 60, color: '#ffe9cc', intensity: 5 },
+        { elev: 12, azim: 300, w: 6, h: 60, color: '#ffe9cc', intensity: 5 },
+        { elev: -55, azim: 0, w: 120, h: 40, color: '#e8dccb', intensity: 0.9 },
+        ...spots(10, 62, 2.2, 60, '#fff3e0', 0),
+      ],
+    },
     background: ['#2b2622', '#0c0a08'],
     exposure: 1.0,
   },
@@ -111,6 +147,10 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
     description: 'Open sky with sun — how the ring looks outdoors.',
     dome: { top: '#9cc3ff', horizon: '#e9f0f7', bottom: '#5a5248', intensity: 1.6 },
     panels: [{ elev: 55, azim: 120, w: 1.6, h: 1.6, color: '#fff7e8', intensity: 2400, round: true }],
+    metal: {
+      dome: { top: '#5d86c4', horizon: '#9aa4ae', bottom: '#2a2620', intensity: 1 },
+      panels: [{ elev: 55, azim: 120, w: 1.6, h: 1.6, color: '#fff7e8', intensity: 2400, round: true }],
+    },
     background: ['#f7f6f2', '#dfe7f0'],
     exposure: 0.85,
   },
@@ -122,6 +162,17 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       ...spots(3, 18, 1.5, 160, '#ffb466', 30),
       ...spots(2, 35, 1.2, 120, '#ffc27a', 200),
     ],
+    metal: {
+      dome: { top: '#2a1a10', horizon: '#120a05', bottom: '#20140b', intensity: 1 },
+      panels: [
+        // candle flames read as warm glows on the metal
+        { elev: 18, azim: 30, w: 14, h: 22, color: '#ffb466', intensity: 4 },
+        { elev: 18, azim: 150, w: 14, h: 22, color: '#ffb466', intensity: 3 },
+        { elev: 35, azim: 200, w: 12, h: 18, color: '#ffc27a', intensity: 3 },
+        { elev: -50, azim: 0, w: 120, h: 40, color: '#5a3a22', intensity: 1 },
+        ...spots(3, 18, 1.5, 120, '#ffb466', 30),
+      ],
+    },
     background: ['#3a2414', '#0e0805'],
     exposure: 1.25,
   },
@@ -137,6 +188,18 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       { elev: 40, azim: 45, w: 28, h: 8, color: '#f4f8ff', intensity: 4 },
       { elev: 40, azim: 225, w: 28, h: 8, color: '#f4f8ff', intensity: 4 },
     ],
+    metal: {
+      dome: { top: '#4a4c50', horizon: '#26272a', bottom: '#141516', intensity: 1 },
+      panels: [
+        { elev: 70, azim: 0, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
+        { elev: 70, azim: 90, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
+        { elev: 70, azim: 180, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
+        { elev: 70, azim: 270, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
+        { elev: 40, azim: 45, w: 28, h: 8, color: '#f4f8ff', intensity: 4 },
+        { elev: 40, azim: 225, w: 28, h: 8, color: '#f4f8ff', intensity: 4 },
+        { elev: -50, azim: 0, w: 120, h: 40, color: '#d8d8d8', intensity: 0.8 },
+      ],
+    },
     background: ['#f2f3f5', '#d6d8dc'],
     exposure: 0.95,
   },
@@ -151,7 +214,7 @@ export const HDRI_PRESETS: { id: string; label: string; url: string }[] = [
 
 const RADIUS = 100;
 
-function buildLightRoom(p: EnvironmentPreset): Scene {
+function buildLightRoom(p: { dome: EnvironmentPreset['dome']; panels: LightPanel[] }): Scene {
   const scene = new Scene();
   const dome = new Mesh(
     new SphereGeometry(RADIUS, 64, 32),
@@ -203,12 +266,12 @@ function buildLightRoom(p: EnvironmentPreset): Scene {
 export interface BakedEnvironment {
   /** Sharp HDR cube map for the ray-traced gems. */
   cube: Texture;
-  /** Prefiltered radiance for rough metal reflections. */
-  pmrem: Texture;
+  /** What metal reflects (the renderer prefilters it for roughness). */
+  metal: Texture;
   dispose(): void;
 }
 
-export function bakeEnvironment(renderer: WebGLRenderer, preset: EnvironmentPreset, size = 1024): BakedEnvironment {
+function bakeRoom(renderer: WebGLRenderer, room: { dome: EnvironmentPreset['dome']; panels: LightPanel[] }, size: number) {
   const target = new WebGLCubeRenderTarget(size, {
     type: HalfFloatType,
     generateMipmaps: true,
@@ -216,42 +279,41 @@ export function bakeEnvironment(renderer: WebGLRenderer, preset: EnvironmentPres
     magFilter: LinearFilter,
   });
   const cam = new CubeCamera(0.1, 500, target);
-  const room = buildLightRoom(preset);
-  cam.update(renderer, room);
-  const pmremGen = new PMREMGenerator(renderer);
-  const pmrem = pmremGen.fromCubemap(target.texture);
-  pmremGen.dispose();
-  room.traverse((o) => {
+  const scene = buildLightRoom(room);
+  cam.update(renderer, scene);
+  scene.traverse((o) => {
     if (o instanceof Mesh) {
       o.geometry.dispose();
       (o.material as MeshBasicMaterial).dispose();
     }
   });
+  return target;
+}
+
+export function bakeEnvironment(renderer: WebGLRenderer, preset: EnvironmentPreset, size = 1024): BakedEnvironment {
+  const gem = bakeRoom(renderer, preset, size);
+  const metal = preset.metal ? bakeRoom(renderer, preset.metal, 512) : null;
   return {
-    cube: target.texture,
-    pmrem: pmrem.texture,
+    cube: gem.texture,
+    metal: (metal ?? gem).texture,
     dispose() {
-      target.dispose();
-      pmrem.dispose();
+      gem.dispose();
+      metal?.dispose();
     },
   };
 }
 
 export async function bakeHDRI(renderer: WebGLRenderer, url: string, size = 1024): Promise<BakedEnvironment> {
-  const tex = await new HDRLoader().loadAsync(url);
+  const tex = await new RGBELoader().loadAsync(url);
   tex.mapping = EquirectangularReflectionMapping;
   const target = new WebGLCubeRenderTarget(size, { type: HalfFloatType, generateMipmaps: true, minFilter: LinearMipmapLinearFilter });
   target.fromEquirectangularTexture(renderer, tex);
-  const pmremGen = new PMREMGenerator(renderer);
-  const pmrem = pmremGen.fromEquirectangular(tex);
-  pmremGen.dispose();
   tex.dispose();
   return {
     cube: target.texture,
-    pmrem: pmrem.texture,
+    metal: target.texture,
     dispose() {
       target.dispose();
-      pmrem.dispose();
     },
   };
 }

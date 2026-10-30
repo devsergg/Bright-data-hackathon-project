@@ -57,6 +57,8 @@ const exportDiamond = new MeshPhysicalMaterial({
 export async function exportRingGLB(ring: Object3D, name = 'ring'): Promise<void> {
   const copy = ring.clone(true) as Group;
   copy.traverse((o) => {
+    // the viewer's bookkeeping (event bubbling, clone ids) would land in glTF extras
+    o.userData = {};
     const mesh = o as Mesh | InstancedMesh;
     if (mesh.isMesh && mesh.material instanceof DiamondMaterial) mesh.material = exportDiamond;
   });

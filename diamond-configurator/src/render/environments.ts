@@ -75,6 +75,11 @@ function spots(n: number, elev: number, size: number, intensity: number, color =
   }));
 }
 
+/** Ring of tall strip softboxes around the horizon. */
+function strips(n: number, elev: number, w: number, h: number, intensity: number, phase = 0, color = '#ffffff'): LightPanel[] {
+  return Array.from({ length: n }, (_, i) => ({ elev, azim: phase + (360 * i) / n, w, h, color, intensity }));
+}
+
 export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
   studio: {
     label: 'Studio Light Tent',
@@ -97,18 +102,18 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       ...spots(8, 42, 1.8, 60, '#ffffff', 22),
     ],
     metal: {
-      dome: { top: '#9a9a9a', horizon: '#2c2c2c', bottom: '#6a6a6a', intensity: 1 },
+      // the horizon is what the band reflects from most viewing angles: keep it a
+      // mid grey and ring it with strip lights, so every angle gets white streaks
+      // with darker gaps between them
+      dome: { top: '#b4b4b4', horizon: '#5c5c5c', bottom: '#8a8a8a', intensity: 1 },
       panels: [
         // overhead softboxes and a white table bounce
         { elev: 62, azim: 60, w: 46, h: 38, color: '#ffffff', intensity: 5 },
         { elev: 62, azim: 180, w: 46, h: 38, color: '#ffffff', intensity: 4 },
         { elev: 62, azim: 300, w: 46, h: 38, color: '#ffffff', intensity: 4.5 },
-        { elev: -60, azim: 0, w: 120, h: 50, color: '#f2f2f2', intensity: 2.2 },
-        // tall strip lights: the long highlights down the band
-        { elev: 10, azim: 35, w: 7, h: 70, color: '#ffffff', intensity: 6 },
-        { elev: 10, azim: 145, w: 7, h: 70, color: '#ffffff', intensity: 5 },
-        { elev: 10, azim: 215, w: 7, h: 70, color: '#ffffff', intensity: 6 },
-        { elev: 10, azim: 325, w: 7, h: 70, color: '#ffffff', intensity: 5 },
+        { elev: -60, azim: 0, w: 120, h: 50, color: '#f2f2f2', intensity: 2.4 },
+        // tall strip lights all round: the long highlights down the band
+        ...strips(6, 8, 11, 64, 4.5, 30),
         // a low horizontal strip for the inside of the shank
         { elev: -8, azim: 90, w: 80, h: 5, color: '#ffffff', intensity: 4 },
         { elev: -8, azim: 270, w: 80, h: 5, color: '#ffffff', intensity: 4 },
@@ -189,7 +194,7 @@ export const ENVIRONMENTS: Record<EnvironmentId, EnvironmentPreset> = {
       { elev: 40, azim: 225, w: 28, h: 8, color: '#f4f8ff', intensity: 4 },
     ],
     metal: {
-      dome: { top: '#4a4c50', horizon: '#26272a', bottom: '#141516', intensity: 1 },
+      dome: { top: '#7a7c80', horizon: '#4a4b4e', bottom: '#3a3b3d', intensity: 1 },
       panels: [
         { elev: 70, azim: 0, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
         { elev: 70, azim: 90, w: 24, h: 10, color: '#f4f8ff', intensity: 6 },
